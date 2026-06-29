@@ -191,6 +191,16 @@ def test_break_while_and_foreach_continue():
     assert run(src) == "8\n"  # 1+3+4
 
 
+def test_lambda():
+    assert run('제곱 = 람다(x) { 반환 x * x }\n출력(제곱(6))') == "36\n"
+    assert run('출력((람다(가, 나) { 반환 가 + 나 })(3, 4))') == "7\n"
+
+
+def test_lambda_higher_order():
+    src = '함수 적용(f, 값) { 반환 f(값) }\n출력(적용(람다(x) { 반환 x + 1 }, 10))'
+    assert run(src) == "11\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

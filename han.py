@@ -23,7 +23,7 @@ class HanError(Exception):
 KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
     '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다', '가져오기',
-    '멈춤', '계속',
+    '멈춤', '계속', '람다',
 }
 OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
@@ -278,6 +278,15 @@ class Parser:
                 if self.at('OP', ','):
                     self.eat()
             self.eat('OP', '}'); return ('dict', pairs)
+        if t.kind == 'KW' and t.val == '람다':       # 익명 함수 람다(매개변수){ 본문 }
+            self.eat('KW', '람다'); self.eat('OP', '(')
+            params = []
+            while not self.at('OP', ')'):
+                params.append(self.eat('ID').val)
+                if self.at('OP', ','):
+                    self.eat()
+            self.eat('OP', ')')
+            return ('lambda', params, self.block())
         raise HanError(f"[{t.line}행] 구문 오류: 예기치 않은 '{t.val}'")
 
 
@@ -468,6 +477,8 @@ class Interp:
             return [self.eval(e, env) for e in node[1]]
         if t == 'dict':
             return {self.eval(k, env): self.eval(v, env) for k, v in node[1]}
+        if t == 'lambda':
+            return Func('<람다>', node[1], node[2], env)
         if t == 'index':
             return self._index_get(self.eval(node[1], env), self.eval(node[2], env))
         if t == 'call':
