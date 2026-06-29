@@ -229,6 +229,15 @@ def test_dict_helpers():
     assert run(src) == "170\n"
 
 
+def test_compound_assign():
+    assert run('x = 10\nx += 5\n출력(x)') == "15\n"
+    assert run('x = 10\nx -= 3\n출력(x)') == "7\n"
+    assert run('x = 4\nx *= 3\n출력(x)') == "12\n"
+    assert run('x = 20\nx /= 4\n출력(x)') == "5\n"
+    assert run('s = "가"\ns += "나"\n출력(s)') == "가나\n"
+    assert run('목록 = [1, 2, 3]\n목록[1] += 10\n출력(목록)') == "[1, 12, 3]\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

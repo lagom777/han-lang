@@ -26,7 +26,7 @@ KEYWORDS = {
     '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다', '가져오기',
     '멈춤', '계속', '람다',
 }
-OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
+OPS = ['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
 
 class Tok:
@@ -156,6 +156,15 @@ class Parser:
             if node[0] == 'index':
                 return ('setindex', node[1], node[2], rhs)
             raise HanError("대입할 수 없는 대상입니다")
+        for cop in ('+=', '-=', '*=', '/='):       # 복합 대입
+            if self.at('OP', cop):
+                self.eat('OP', cop)
+                combined = ('bin', cop[0], node, self.expr())
+                if node[0] == 'var':
+                    return ('assign', node[1], combined)
+                if node[0] == 'index':
+                    return ('setindex', node[1], node[2], combined)
+                raise HanError("복합 대입 대상이 올바르지 않습니다")
         return ('exprstmt', node)
 
     def func_decl(self):
