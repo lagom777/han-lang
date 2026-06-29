@@ -22,7 +22,7 @@ class HanError(Exception):
 # ============================================================ 렉서
 KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
-    '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다',
+    '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다', '가져오기',
 }
 OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
@@ -121,6 +121,13 @@ class Parser:
         return ('stmt', ln, self._statement_inner())   # 문장에 행 번호 부착(런타임 오류 보고용)
 
     def _statement_inner(self):
+        if self.at('KW', '가져오기'):
+            self.eat('KW', '가져오기')
+            t = self.peek()
+            if t.kind != 'STR':
+                raise HanError(f"[{t.line}행] 가져오기 뒤에는 \"경로\" 문자열이 필요합니다")
+            self.eat()
+            return ('import', t.val)
         if self.at('KW', '함수'):
             return self.func_decl()
         if self.at('KW', '만약'):
@@ -330,6 +337,8 @@ class Interp:
         self.g = Env()
         self.out = out if out is not None else sys.stdout
         self.cur_line = 0
+        self.base_dir = '.'
+        self.imported = set()
 
     def run(self, ast):
         try:
@@ -348,10 +357,28 @@ class Interp:
             else:
                 self.exec(st, env)
 
+    def _do_import(self, path):
+        full = os.path.normpath(os.path.join(self.base_dir, path))
+        if full in self.imported:   # 중복/순환 방지
+            return
+        self.imported.add(full)
+        try:
+            with open(full, encoding='utf-8') as f:
+                src = f.read()
+        except OSError:
+            raise HanError(f"가져올 수 없습니다: {path}")
+        sub = Parser(lex(src)).parse()
+        prev = self.base_dir
+        self.base_dir = os.path.dirname(full) or '.'   # 중첩 import 상대경로
+        self.exec_block(sub, self.g)                    # 정의를 전역에 주입
+        self.base_dir = prev
+
     def exec(self, node, env):
         t = node[0]
         if t == 'block':
             inner = Env(env); self.exec_block(node, inner)
+        elif t == 'import':
+            self._do_import(node[1])
         elif t == 'assign':
             env.set_existing_or_define(node[1], self.eval(node[2], env))
         elif t == 'func':
@@ -590,8 +617,9 @@ BUILTINS = {
 
 
 # ============================================================ 진입점
-def 실행소스(src, out=None):
+def 실행소스(src, out=None, base_dir='.'):
     interp = Interp(out=out)
+    interp.base_dir = base_dir
     interp.run(Parser(lex(src)).parse())
     return interp
 
@@ -601,7 +629,7 @@ def main(argv):
         with open(argv[2], encoding='utf-8') as f:
             src = f.read()
         try:
-            실행소스(src)
+            실행소스(src, base_dir=os.path.dirname(os.path.abspath(argv[2])) or '.')
         except HanError as e:
             print(f"오류: {e}", file=sys.stderr); sys.exit(1)
     elif len(argv) == 1 or (len(argv) == 2 and argv[1] in ('repl', '대화')):

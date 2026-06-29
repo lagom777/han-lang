@@ -4,7 +4,9 @@ import io
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)  # 상대경로 가져오기("examples/..") 가 cwd와 무관하게 동작하도록
 from han import 실행소스  # noqa: E402
 
 
@@ -130,6 +132,12 @@ def test_runtime_error_has_line():
         assert False, "오류가 나야 함"
     except Exception as e:
         assert '2행' in str(e)
+
+
+def test_module_import():
+    # 다른 .han 파일의 함수/변수를 가져와 사용
+    out = run('가져오기 "examples/lib.han"\n출력(곱하기(6, 7))\n출력(제곱(5))')
+    assert out == "42\n25\n"
 
 
 if __name__ == '__main__':
