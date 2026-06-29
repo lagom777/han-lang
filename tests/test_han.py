@@ -84,6 +84,21 @@ def test_dict_missing_key_errors():
         pass
 
 
+def test_builtins_collection():
+    assert run('출력(합([1, 2, 3, 4]))') == "10\n"
+    assert run('출력(정렬([3, 1, 2]))') == "[1, 2, 3]\n"
+    assert run('출력(최대([5, 9, 2]))') == "9\n"
+    assert run('출력(최소([5, 9, 2]))') == "2\n"
+    assert run('출력(범위(5))') == "[0, 1, 2, 3, 4]\n"
+    assert run('출력(범위(2, 5))') == "[2, 3, 4]\n"
+    assert run('출력(거꾸로([1, 2, 3]))') == "[3, 2, 1]\n"
+
+
+def test_builtins_string():
+    assert run('출력(나누기("가,나,다", ","))') == "[가, 나, 다]\n"
+    assert run('출력(합치기(["가", "나", "다"], "-"))') == "가-나-다\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

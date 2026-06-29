@@ -445,7 +445,12 @@ class Interp:
         args = [self.eval(a, env) for a in node[2]]
         # 내장 함수
         if callee[0] == 'var' and callee[1] in BUILTINS:
-            return BUILTINS[callee[1]](self, args)
+            try:
+                return BUILTINS[callee[1]](self, args)
+            except HanError:
+                raise
+            except Exception as e:
+                raise HanError(f"'{callee[1]}' 호출 오류: {e}")
         fn = self.eval(callee, env)
         if not isinstance(fn, Func):
             raise HanError("호출 오류: 함수가 아닙니다")
@@ -480,11 +485,54 @@ def _추가(interp, args):           # 목록 끝에 값 추가
     args[0].append(args[1]); return None
 
 
+def _합(interp, args):             # 목록 원소 합
+    return sum(args[0])
+
+
+def _정렬(interp, args):           # 정렬된 새 목록
+    return sorted(args[0])
+
+
+def _최대(interp, args):
+    return max(args[0])
+
+
+def _최소(interp, args):
+    return min(args[0])
+
+
+def _범위(interp, args):           # 범위(끝) 또는 범위(시작, 끝) → 목록
+    if len(args) == 1:
+        return list(range(int(args[0])))
+    return list(range(int(args[0]), int(args[1])))
+
+
+def _나누기(interp, args):         # 문자열 나누기 → 목록
+    return args[0].split(args[1]) if len(args) > 1 else args[0].split()
+
+
+def _합치기(interp, args):         # 목록 → 문자열 (구분자)
+    sep = args[1] if len(args) > 1 else ''
+    return sep.join(문자열화(x) for x in args[0])
+
+
+def _거꾸로(interp, args):         # 뒤집은 새 목록
+    return list(reversed(args[0]))
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
     '숫자': _숫자,
     '추가': _추가,
+    '합': _합,
+    '정렬': _정렬,
+    '최대': _최대,
+    '최소': _최소,
+    '범위': _범위,
+    '나누기': _나누기,
+    '합치기': _합치기,
+    '거꾸로': _거꾸로,
 }
 
 
