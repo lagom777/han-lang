@@ -123,6 +123,15 @@ def test_ai_질문_stub_without_key():
     assert 'AI 키 없음' in out
 
 
+def test_runtime_error_has_line():
+    # 런타임 오류에 행 번호가 붙는다(2번째 줄에서 미정의 변수)
+    try:
+        run('출력(1)\n출력(없는변수)')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert '2행' in str(e)
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

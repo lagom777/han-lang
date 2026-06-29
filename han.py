@@ -117,6 +117,10 @@ class Parser:
         return ('block', stmts)
 
     def statement(self):
+        ln = self.peek().line
+        return ('stmt', ln, self._statement_inner())   # 문장에 행 번호 부착(런타임 오류 보고용)
+
+    def _statement_inner(self):
         if self.at('KW', '함수'):
             return self.func_decl()
         if self.at('KW', '만약'):
@@ -325,13 +329,24 @@ class Interp:
     def __init__(self, out=None):
         self.g = Env()
         self.out = out if out is not None else sys.stdout
+        self.cur_line = 0
 
     def run(self, ast):
-        self.exec_block(ast, self.g)
+        try:
+            self.exec_block(ast, self.g)
+        except HanError as e:
+            msg = str(e)
+            if not msg.startswith('['):     # 행 정보 없는 런타임 오류에 현재 행 부착
+                raise HanError(f"[{self.cur_line}행] {msg}")
+            raise
 
     def exec_block(self, block, env):
         for st in block[1]:
-            self.exec(st, env)
+            if st[0] == 'stmt':
+                self.cur_line = st[1]
+                self.exec(st[2], env)
+            else:
+                self.exec(st, env)
 
     def exec(self, node, env):
         t = node[0]
