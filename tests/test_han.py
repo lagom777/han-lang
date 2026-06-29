@@ -238,6 +238,20 @@ def test_compound_assign():
     assert run('목록 = [1, 2, 3]\n목록[1] += 10\n출력(목록)') == "[1, 12, 3]\n"
 
 
+def test_try_catch():
+    out = run('시도 {\n출력(10 / 0)\n} 잡기(오류) {\n출력("잡음: " + 오류)\n}')
+    assert "잡음:" in out and "0으로" in out
+
+
+def test_try_no_error():
+    assert run('시도 {\n출력("정상")\n} 잡기(e) {\n출력("안탐")\n}') == "정상\n"
+
+
+def test_try_catch_name_and_index():
+    assert run('시도 { 출력(없는것) } 잡기(오류) { 출력("처리됨") }') == "처리됨\n"
+    assert run('목록 = [1, 2]\n시도 { 출력(목록[9]) } 잡기(e) { 출력("범위처리") }') == "범위처리\n"
+
+
 def test_slice():
     assert run('출력([1, 2, 3, 4, 5][1:3])') == "[2, 3]\n"
     assert run('출력("한국어"[0:2])') == "한국\n"

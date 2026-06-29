@@ -24,7 +24,7 @@ class HanError(Exception):
 KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
     '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다', '가져오기',
-    '멈춤', '계속', '람다',
+    '멈춤', '계속', '람다', '시도', '잡기',
 }
 OPS = ['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
@@ -134,6 +134,13 @@ class Parser:
             self.eat(); return ('break',)
         if self.at('KW', '계속'):
             self.eat(); return ('continue',)
+        if self.at('KW', '시도'):                 # 시도 { } 잡기(오류) { }
+            self.eat('KW', '시도')
+            try_block = self.block()
+            self.eat('KW', '잡기'); self.eat('OP', '(')
+            err_var = self.eat('ID').val
+            self.eat('OP', ')')
+            return ('try', try_block, err_var, self.block())
         if self.at('KW', '함수'):
             return self.func_decl()
         if self.at('KW', '만약'):
@@ -470,6 +477,13 @@ class Interp:
             raise BreakSignal()
         elif t == 'continue':
             raise ContinueSignal()
+        elif t == 'try':
+            try:
+                self.exec(node[1], env)
+            except HanError as e:
+                scope = Env(env)
+                scope.vars[node[2]] = str(e)
+                self.exec_block(node[3], scope)
         elif t == 'return':
             raise Return(self.eval(node[1], env) if node[1] is not None else None)
         elif t == 'setindex':
