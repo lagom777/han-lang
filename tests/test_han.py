@@ -48,6 +48,25 @@ def test_logic_and_bool():
     assert run('출력(아니다 거짓)') == "참\n"
 
 
+def test_list_literal_and_index():
+    assert run('목록 = [10, 20, 30]\n출력(목록[0] + 목록[2])') == "40\n"
+    assert run('출력([1, 2, 3])') == "[1, 2, 3]\n"
+
+
+def test_list_setindex_and_append():
+    src = '목록 = [1, 2]\n목록[0] = 9\n추가(목록, 3)\n출력(목록)\n출력(길이(목록))'
+    assert run(src) == "[9, 2, 3]\n3\n"
+
+
+def test_list_truthiness_and_oob():
+    assert run('만약 [] { 출력("a") } 아니면 { 출력("b") }') == "b\n"
+    try:
+        run('출력([1, 2][5])')
+        assert False, "범위 오류가 나야 함"
+    except Exception:
+        pass
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

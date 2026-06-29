@@ -21,7 +21,7 @@ KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
     '참', '거짓', '없음', '부터', '까지', '를', '그리고', '또는', '아니다',
 }
-OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', ',']
+OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ',']
 
 
 class Tok:
@@ -126,10 +126,17 @@ class Parser:
             self.eat()
             val = None if (self.at('OP', '}') or self.at('EOF')) else self.expr()
             return ('return', val)
-        # 대입 vs 표현식
-        if self.at('ID') and self.toks[self.p + 1].kind == 'OP' and self.toks[self.p + 1].val == '=':
-            name = self.eat('ID').val; self.eat('OP', '='); return ('assign', name, self.expr())
-        return ('exprstmt', self.expr())
+        # 대입(변수/색인) vs 표현식
+        node = self.expr()
+        if self.at('OP', '='):
+            self.eat('OP', '=')
+            rhs = self.expr()
+            if node[0] == 'var':
+                return ('assign', node[1], rhs)
+            if node[0] == 'index':
+                return ('setindex', node[1], node[2], rhs)
+            raise HanError("대입할 수 없는 대상입니다")
+        return ('exprstmt', node)
 
     def func_decl(self):
         self.eat('KW', '함수'); name = self.eat('ID').val; self.eat('OP', '(')
@@ -202,13 +209,19 @@ class Parser:
 
     def call(self):
         node = self.primary()
-        while self.at('OP', '('):
-            self.eat('OP', '('); args = []
-            while not self.at('OP', ')'):
-                args.append(self.expr())
-                if self.at('OP', ','):
-                    self.eat()
-            self.eat('OP', ')'); node = ('call', node, args)
+        while True:
+            if self.at('OP', '('):
+                self.eat('OP', '('); args = []
+                while not self.at('OP', ')'):
+                    args.append(self.expr())
+                    if self.at('OP', ','):
+                        self.eat()
+                self.eat('OP', ')'); node = ('call', node, args)
+            elif self.at('OP', '['):
+                self.eat('OP', '['); idx = self.expr(); self.eat('OP', ']')
+                node = ('index', node, idx)
+            else:
+                break
         return node
 
     def primary(self):
@@ -227,6 +240,13 @@ class Parser:
             self.eat(); return ('var', t.val)
         if t.kind == 'OP' and t.val == '(':
             self.eat(); node = self.expr(); self.eat('OP', ')'); return node
+        if t.kind == 'OP' and t.val == '[':
+            self.eat('OP', '['); elems = []
+            while not self.at('OP', ']'):
+                elems.append(self.expr())
+                if self.at('OP', ','):
+                    self.eat()
+            self.eat('OP', ']'); return ('list', elems)
         raise HanError(f"[{t.line}행] 구문 오류: 예기치 않은 '{t.val}'")
 
 
@@ -273,11 +293,15 @@ def 문자열화(v):
         return str(int(v))
     if isinstance(v, Func):
         return f"<함수 {v.name}>"
+    if isinstance(v, list):
+        return '[' + ', '.join(문자열화(x) for x in v) + ']'
     return str(v)
 
 
 def 참인가(v):
-    return not (v is False or v is None or v == 0 or v == '' )
+    if isinstance(v, (list, dict, str)):
+        return len(v) > 0
+    return not (v is False or v is None or v == 0)
 
 
 class Interp:
@@ -317,6 +341,9 @@ class Interp:
                 i += 1
         elif t == 'return':
             raise Return(self.eval(node[1], env) if node[1] is not None else None)
+        elif t == 'setindex':
+            obj = self.eval(node[1], env); i = self.eval(node[2], env); v = self.eval(node[3], env)
+            self._index_set(obj, i, v)
         elif t == 'exprstmt':
             self.eval(node[1], env)
         else:
@@ -333,9 +360,32 @@ class Interp:
             return (not 참인가(v)) if node[1] == '아니다' else -v
         if t == 'bin':
             return self.binop(node[1], node[2], node[3], env)
+        if t == 'list':
+            return [self.eval(e, env) for e in node[1]]
+        if t == 'index':
+            return self._index_get(self.eval(node[1], env), self.eval(node[2], env))
         if t == 'call':
             return self.call(node, env)
         raise HanError(f"실행 오류: 알 수 없는 식 {t}")
+
+    def _index_get(self, obj, i):
+        if isinstance(obj, (list, str)):
+            if not isinstance(i, int):
+                raise HanError("색인은 정수여야 합니다")
+            if i < -len(obj) or i >= len(obj):
+                raise HanError(f"색인 범위 오류: {i}")
+            return obj[i]
+        raise HanError("색인할 수 없는 값입니다")
+
+    def _index_set(self, obj, i, v):
+        if isinstance(obj, list):
+            if not isinstance(i, int):
+                raise HanError("색인은 정수여야 합니다")
+            if i < -len(obj) or i >= len(obj):
+                raise HanError(f"색인 범위 오류: {i}")
+            obj[i] = v
+            return
+        raise HanError("색인 대입할 수 없는 값입니다")
 
     def binop(self, op, ln, rn, env):
         if op == '그리고':
@@ -407,10 +457,15 @@ def _숫자(interp, args):
     return float(s) if (isinstance(s, str) and '.' in s) else int(s)
 
 
+def _추가(interp, args):           # 목록 끝에 값 추가
+    args[0].append(args[1]); return None
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
     '숫자': _숫자,
+    '추가': _추가,
 }
 
 
