@@ -19,7 +19,7 @@ class HanError(Exception):
 # ============================================================ 렉서
 KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
-    '참', '거짓', '없음', '부터', '까지', '를', '그리고', '또는', '아니다',
+    '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다',
 }
 OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
@@ -157,8 +157,12 @@ class Parser:
 
     def for_stmt(self):
         self.eat('KW', '반복'); var = self.eat('ID').val; self.eat('KW', '를')
-        start = self.expr(); self.eat('KW', '부터'); end = self.expr(); self.eat('KW', '까지')
-        return ('for', var, start, end, self.block())
+        first = self.expr()
+        if self.at('KW', '에서'):            # 반복 x 를 [목록] 에서 { }
+            self.eat('KW', '에서')
+            return ('foreach', var, first, self.block())
+        self.eat('KW', '부터'); end = self.expr(); self.eat('KW', '까지')   # 반복 i 를 a 부터 b 까지 { }
+        return ('for', var, first, end, self.block())
 
     # 표현식 (우선순위)
     def expr(self):
@@ -349,6 +353,17 @@ class Interp:
                 loop = Env(env); loop.vars[node[1]] = i
                 self.exec_block(node[4], loop)
                 i += 1
+        elif t == 'foreach':
+            coll = self.eval(node[2], env)
+            if isinstance(coll, dict):
+                items = list(coll.keys())
+            elif isinstance(coll, (list, str)):
+                items = coll
+            else:
+                raise HanError("반복할 수 없는 값입니다 (목록·문자열·사전만)")
+            for it in items:
+                loop = Env(env); loop.vars[node[1]] = it
+                self.exec_block(node[3], loop)
         elif t == 'return':
             raise Return(self.eval(node[1], env) if node[1] is not None else None)
         elif t == 'setindex':

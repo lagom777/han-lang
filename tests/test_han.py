@@ -99,6 +99,23 @@ def test_builtins_string():
     assert run('출력(합치기(["가", "나", "다"], "-"))') == "가-나-다\n"
 
 
+def test_foreach_list():
+    assert run('합 = 0\n반복 x 를 [10, 20, 30] 에서 { 합 = 합 + x }\n출력(합)') == "60\n"
+
+
+def test_foreach_string():
+    assert run('반복 c 를 "한글" 에서 { 출력(c) }') == "한\n글\n"
+
+
+def test_foreach_dict_keys():
+    src = '점수 = {"가": 1, "나": 2}\n반복 k 를 점수 에서 { 출력(k + "=" + 점수[k]) }'
+    assert run(src) == "가=1\n나=2\n"
+
+
+def test_range_for_still_works():
+    assert run('반복 i 를 1 부터 3 까지 { 출력(i) }') == "1\n2\n3\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
