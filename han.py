@@ -23,6 +23,7 @@ class HanError(Exception):
 KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
     '참', '거짓', '없음', '부터', '까지', '에서', '를', '그리고', '또는', '아니다', '가져오기',
+    '멈춤', '계속',
 }
 OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
@@ -128,6 +129,10 @@ class Parser:
                 raise HanError(f"[{t.line}행] 가져오기 뒤에는 \"경로\" 문자열이 필요합니다")
             self.eat()
             return ('import', t.val)
+        if self.at('KW', '멈춤'):
+            self.eat(); return ('break',)
+        if self.at('KW', '계속'):
+            self.eat(); return ('continue',)
         if self.at('KW', '함수'):
             return self.func_decl()
         if self.at('KW', '만약'):
@@ -287,6 +292,14 @@ class Return(Exception):
         self.value = value
 
 
+class BreakSignal(Exception):
+    pass
+
+
+class ContinueSignal(Exception):
+    pass
+
+
 class Env:
     def __init__(self, parent=None):
         self.vars, self.parent = {}, parent
@@ -343,6 +356,8 @@ class Interp:
     def run(self, ast):
         try:
             self.exec_block(ast, self.g)
+        except (BreakSignal, ContinueSignal):
+            raise HanError(f"[{self.cur_line}행] '멈춤'/'계속'은 반복문 안에서만 쓸 수 있습니다")
         except HanError as e:
             msg = str(e)
             if not msg.startswith('['):     # 행 정보 없는 런타임 오류에 현재 행 부착
@@ -390,13 +405,23 @@ class Interp:
                 self.exec(node[3], env)
         elif t == 'while':
             while 참인가(self.eval(node[1], env)):
-                self.exec(node[2], env)
+                try:
+                    self.exec(node[2], env)
+                except BreakSignal:
+                    break
+                except ContinueSignal:
+                    continue
         elif t == 'for':
             a = self.eval(node[2], env); b = self.eval(node[3], env)
             i = a
             while i <= b:                       # 부터..까지 = 양끝 포함
                 loop = Env(env); loop.vars[node[1]] = i
-                self.exec_block(node[4], loop)
+                try:
+                    self.exec_block(node[4], loop)
+                except BreakSignal:
+                    break
+                except ContinueSignal:
+                    pass
                 i += 1
         elif t == 'foreach':
             coll = self.eval(node[2], env)
@@ -408,7 +433,16 @@ class Interp:
                 raise HanError("반복할 수 없는 값입니다 (목록·문자열·사전만)")
             for it in items:
                 loop = Env(env); loop.vars[node[1]] = it
-                self.exec_block(node[3], loop)
+                try:
+                    self.exec_block(node[3], loop)
+                except BreakSignal:
+                    break
+                except ContinueSignal:
+                    continue
+        elif t == 'break':
+            raise BreakSignal()
+        elif t == 'continue':
+            raise ContinueSignal()
         elif t == 'return':
             raise Return(self.eval(node[1], env) if node[1] is not None else None)
         elif t == 'setindex':

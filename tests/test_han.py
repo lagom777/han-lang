@@ -175,6 +175,22 @@ def test_repl_needs_more():
     assert needs_more('1 + 2') is False
 
 
+def test_break():
+    src = '합 = 0\n반복 i 를 1 부터 100 까지 {\n만약 i > 5 { 멈춤 }\n합 = 합 + i\n}\n출력(합)'
+    assert run(src) == "15\n"  # 1+2+3+4+5
+
+
+def test_continue():
+    src = '합 = 0\n반복 i 를 1 부터 10 까지 {\n만약 i % 2 == 0 { 계속 }\n합 = 합 + i\n}\n출력(합)'
+    assert run(src) == "25\n"  # 1+3+5+7+9
+
+
+def test_break_while_and_foreach_continue():
+    assert run('수 = 0\n동안 참 {\n수 = 수 + 1\n만약 수 == 3 { 멈춤 }\n}\n출력(수)') == "3\n"
+    src = '결과 = 0\n반복 x 를 [1, 2, 3, 4] 에서 {\n만약 x == 2 { 계속 }\n결과 = 결과 + x\n}\n출력(결과)'
+    assert run(src) == "8\n"  # 1+3+4
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
