@@ -7,7 +7,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)  # 상대경로 가져오기("examples/..") 가 cwd와 무관하게 동작하도록
-from han import 실행소스  # noqa: E402
+from han import 실행소스, Interp, repl_eval, needs_more  # noqa: E402
 
 
 def run(src):
@@ -158,6 +158,21 @@ def test_type_builtin():
     assert run('출력(타입([1]))') == "목록\n"
     assert run('출력(타입(참))') == "참거짓\n"
     assert run('출력(타입(없음))') == "없음\n"
+
+
+def test_repl_echo_and_state():
+    it = Interp(out=io.StringIO())
+    assert repl_eval(it, '1 + 2') == '3'        # 식은 값 에코
+    assert repl_eval(it, 'x = 10') is None       # 대입은 에코 없음
+    assert repl_eval(it, 'x * 2') == '20'        # REPL 상태 유지
+    assert repl_eval(it, '출력("안녕")') is None  # 부수효과(출력)는 에코 없음
+    assert it.out.getvalue() == '안녕\n'
+
+
+def test_repl_needs_more():
+    assert needs_more('함수 f() {') is True
+    assert needs_more('함수 f() { 반환 1 }') is False
+    assert needs_more('1 + 2') is False
 
 
 if __name__ == '__main__':

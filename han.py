@@ -681,6 +681,32 @@ def 실행소스(src, out=None, base_dir='.'):
     return interp
 
 
+def needs_more(src):
+    """REPL: 블록이 안 닫혔으면(또는 문자열 미완) True → 다음 줄 계속 입력."""
+    try:
+        toks = lex(src)
+    except HanError:
+        return True
+    depth = 0
+    for t in toks:
+        if t.kind == 'OP' and t.val == '{':
+            depth += 1
+        elif t.kind == 'OP' and t.val == '}':
+            depth -= 1
+    return depth > 0
+
+
+def repl_eval(interp, src):
+    """REPL용 1입력 처리: 단일 식이면 값 문자열 반환(에코), 아니면 실행 후 None."""
+    ast = Parser(lex(src)).parse()
+    if (ast[0] == 'block' and len(ast[1]) == 1 and ast[1][0][0] == 'stmt'
+            and ast[1][0][2][0] == 'exprstmt'):
+        val = interp.eval(ast[1][0][2][1], interp.g)
+        return None if val is None else 문자열화(val)
+    interp.run(ast)
+    return None
+
+
 def main(argv):
     if len(argv) >= 3 and argv[1] in ('실행', 'run'):
         with open(argv[2], encoding='utf-8') as f:
@@ -690,17 +716,25 @@ def main(argv):
         except HanError as e:
             print(f"오류: {e}", file=sys.stderr); sys.exit(1)
     elif len(argv) == 1 or (len(argv) == 2 and argv[1] in ('repl', '대화')):
-        print("한(Han) v0 · 대화형. 종료는 Ctrl-D")
+        print("한(Han) v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. 종료는 Ctrl-D")
         interp = Interp()
+        buf = ''
         while True:
             try:
-                line = input("한> ")
+                line = input('... ' if buf else '한> ')
             except EOFError:
                 print(); break
-            if not line.strip():
+            buf = (buf + '\n' + line) if buf else line
+            if not buf.strip():
+                buf = ''
                 continue
+            if needs_more(buf):       # 블록 미완 → 계속 입력
+                continue
+            src = buf; buf = ''
             try:
-                interp.run(Parser(lex(line)).parse())
+                echo = repl_eval(interp, src)
+                if echo is not None:
+                    print(echo)
             except (HanError, Return) as e:
                 print(f"오류: {e}")
     else:
