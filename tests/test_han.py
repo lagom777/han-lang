@@ -140,6 +140,26 @@ def test_module_import():
     assert out == "42\n25\n"
 
 
+def test_string_methods():
+    assert run('출력(대문자("han"))') == "HAN\n"
+    assert run('출력(소문자("HAN"))') == "han\n"
+    assert run('출력(다듬기("  안녕  "))') == "안녕\n"
+    assert run('출력(바꾸기("가나가", "가", "다"))') == "다나다\n"
+    assert run('출력(포함("한글날", "글"))') == "참\n"
+    assert run('출력(포함([1, 2, 3], 2))') == "참\n"
+    assert run('출력(시작("한국어", "한"))') == "참\n"
+    assert run('출력(끝("프로그램", "램"))') == "참\n"
+
+
+def test_type_builtin():
+    assert run('출력(타입(3))') == "정수\n"
+    assert run('출력(타입(3.5))') == "실수\n"
+    assert run('출력(타입("x"))') == "문자열\n"
+    assert run('출력(타입([1]))') == "목록\n"
+    assert run('출력(타입(참))') == "참거짓\n"
+    assert run('출력(타입(없음))') == "없음\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

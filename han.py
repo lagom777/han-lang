@@ -599,6 +599,55 @@ def _질문(interp, args):           # AI에게 묻기 — 질문(프롬프트[,
         raise HanError('AI 호출 실패: ' + str(e))
 
 
+def _대문자(interp, args):
+    return args[0].upper()
+
+
+def _소문자(interp, args):
+    return args[0].lower()
+
+
+def _다듬기(interp, args):          # 앞뒤 공백 제거
+    return args[0].strip()
+
+
+def _바꾸기(interp, args):          # 바꾸기(문자열, 옛, 새)
+    return args[0].replace(args[1], args[2])
+
+
+def _포함(interp, args):           # 포함(컨테이너, 값) → 참/거짓 (문자열·목록·사전)
+    return args[1] in args[0]
+
+
+def _시작(interp, args):
+    return args[0].startswith(args[1])
+
+
+def _끝(interp, args):
+    return args[0].endswith(args[1])
+
+
+def _타입(interp, args):           # 값의 타입 이름
+    v = args[0]
+    if v is True or v is False:
+        return '참거짓'
+    if v is None:
+        return '없음'
+    if isinstance(v, int):
+        return '정수'
+    if isinstance(v, float):
+        return '실수'
+    if isinstance(v, str):
+        return '문자열'
+    if isinstance(v, list):
+        return '목록'
+    if isinstance(v, dict):
+        return '사전'
+    if isinstance(v, Func):
+        return '함수'
+    return '알수없음'
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -613,6 +662,14 @@ BUILTINS = {
     '합치기': _합치기,
     '거꾸로': _거꾸로,
     '질문': _질문,
+    '대문자': _대문자,
+    '소문자': _소문자,
+    '다듬기': _다듬기,
+    '바꾸기': _바꾸기,
+    '포함': _포함,
+    '시작': _시작,
+    '끝': _끝,
+    '타입': _타입,
 }
 
 
