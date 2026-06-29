@@ -221,6 +221,14 @@ def test_input_builtin():
     assert out == "이름? 홍길동 43\n"
 
 
+def test_dict_helpers():
+    assert run('출력(키들({"가": 1, "나": 2}))') == "[가, 나]\n"
+    assert run('출력(값들({"가": 1, "나": 2}))') == "[1, 2]\n"
+    assert run('출력(항목들({"가": 1}))') == "[[가, 1]]\n"
+    src = '점수 = {"국": 90, "수": 80}\n합계 = 0\n반복 v 를 값들(점수) 에서 { 합계 = 합계 + v }\n출력(합계)'
+    assert run(src) == "170\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

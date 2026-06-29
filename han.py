@@ -729,6 +729,18 @@ def _입력(interp, args):           # 한 줄 입력받기 — 입력([프롬�
     return line.rstrip('\n') if line else ''
 
 
+def _키들(interp, args):           # 사전의 키 목록
+    return list(args[0].keys())
+
+
+def _값들(interp, args):           # 사전의 값 목록
+    return list(args[0].values())
+
+
+def _항목들(interp, args):         # 사전의 [키, 값] 목록
+    return [[k, v] for k, v in args[0].items()]
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -758,6 +770,9 @@ BUILTINS = {
     '제곱근': _제곱근,
     '거듭제곱': _거듭제곱,
     '입력': _입력,
+    '키들': _키들,
+    '값들': _값들,
+    '항목들': _항목들,
 }
 
 
