@@ -595,7 +595,9 @@ class Interp:
                 raise
             except Exception as e:
                 raise HanError(f"'{callee[1]}' 호출 오류: {e}")
-        fn = self.eval(callee, env)
+        return self.apply_func(self.eval(callee, env), args)
+
+    def apply_func(self, fn, args):      # 값 인자로 Func 호출 (call·고차 내장함수 공유)
         if not isinstance(fn, Func):
             raise HanError("호출 오류: 함수가 아닙니다")
         if len(args) != len(fn.params):
@@ -803,6 +805,14 @@ def _제이슨문자열(interp, args):    # 값 → JSON 문자열 (제이슨문
     return _json.dumps(args[0], ensure_ascii=False, indent=indent)
 
 
+def _변환(interp, args):           # 변환(목록, 함수) → 각 원소에 함수 적용한 새 목록 (map)
+    return [interp.apply_func(args[1], [x]) for x in args[0]]
+
+
+def _거르기(interp, args):         # 거르기(목록, 함수) → 함수가 참인 원소만 (filter)
+    return [x for x in args[0] if 참인가(interp.apply_func(args[1], [x]))]
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -838,6 +848,8 @@ BUILTINS = {
     '항목들': _항목들,
     '제이슨파싱': _제이슨파싱,
     '제이슨문자열': _제이슨문자열,
+    '변환': _변환,
+    '거르기': _거르기,
 }
 
 
