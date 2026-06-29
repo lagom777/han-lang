@@ -779,6 +779,15 @@ def _항목들(interp, args):         # 사전의 [키, 값] 목록
     return [[k, v] for k, v in args[0].items()]
 
 
+def _제이슨파싱(interp, args):      # JSON 문자열 → 값 (LLM 출력·API 응답)
+    return _json.loads(args[0])
+
+
+def _제이슨문자열(interp, args):    # 값 → JSON 문자열 (제이슨문자열(값[, 들여쓰기]))
+    indent = int(args[1]) if len(args) > 1 else None
+    return _json.dumps(args[0], ensure_ascii=False, indent=indent)
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -811,6 +820,8 @@ BUILTINS = {
     '키들': _키들,
     '값들': _값들,
     '항목들': _항목들,
+    '제이슨파싱': _제이슨파싱,
+    '제이슨문자열': _제이슨문자열,
 }
 
 

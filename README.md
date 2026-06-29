@@ -77,6 +77,7 @@ python3 tests/test_han.py                 # 테스트
 - **목록**: `길이` `추가` `합` `정렬` `최대` `최소` `범위(끝|시작,끝)` `거꾸로`
 - **문자열**: `대문자` `소문자` `다듬기` `바꾸기` `나누기` `합치기` `포함` `시작` `끝`
 - **사전**: `키들` `값들` `항목들`
+- **JSON**: `제이슨파싱(문자열)` → 값 · `제이슨문자열(값[, 들여쓰기])` → JSON 문자열
 - **수학**: `절댓값` `반올림(수[,자리])` `올림` `내림` `제곱근` `거듭제곱(밑,지수)`
 - **AI**: `질문(프롬프트[, 모델])` — OpenRouter LLM 호출 (`OPENROUTER_API_KEY` 필요, 없으면 안내)
 
@@ -84,7 +85,7 @@ python3 tests/test_han.py                 # 테스트
 런타임 오류에 행 번호가 붙는다 — 예: `[2행] 이름 오류: '없는변수' 가 정의되지 않았습니다`
 
 ## 예제 (`examples/`)
-hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound
+hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json
 
 ## 로드맵 (빌드 루프로 확장)
 표준 라이브러리 확충 · 더 풍부한 오류(열 위치) · 패키지/네임스페이스 · (장기) 셀프호스팅·네이티브 백엔드.
