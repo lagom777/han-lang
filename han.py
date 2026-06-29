@@ -21,7 +21,7 @@ KEYWORDS = {
     '함수', '만약', '아니면', '동안', '반복', '반환',
     '참', '거짓', '없음', '부터', '까지', '를', '그리고', '또는', '아니다',
 }
-OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ',']
+OPS = ['==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '=', '<', '>', '(', ')', '{', '}', '[', ']', ':', ',']
 
 
 class Tok:
@@ -247,6 +247,14 @@ class Parser:
                 if self.at('OP', ','):
                     self.eat()
             self.eat('OP', ']'); return ('list', elems)
+        if t.kind == 'OP' and t.val == '{':       # 사전(맵) 리터럴 {키: 값, ...}
+            self.eat('OP', '{'); pairs = []
+            while not self.at('OP', '}'):
+                k = self.expr(); self.eat('OP', ':'); v = self.expr()
+                pairs.append((k, v))
+                if self.at('OP', ','):
+                    self.eat()
+            self.eat('OP', '}'); return ('dict', pairs)
         raise HanError(f"[{t.line}행] 구문 오류: 예기치 않은 '{t.val}'")
 
 
@@ -295,6 +303,8 @@ def 문자열화(v):
         return f"<함수 {v.name}>"
     if isinstance(v, list):
         return '[' + ', '.join(문자열화(x) for x in v) + ']'
+    if isinstance(v, dict):
+        return '{' + ', '.join(문자열화(k) + ': ' + 문자열화(x) for k, x in v.items()) + '}'
     return str(v)
 
 
@@ -362,6 +372,8 @@ class Interp:
             return self.binop(node[1], node[2], node[3], env)
         if t == 'list':
             return [self.eval(e, env) for e in node[1]]
+        if t == 'dict':
+            return {self.eval(k, env): self.eval(v, env) for k, v in node[1]}
         if t == 'index':
             return self._index_get(self.eval(node[1], env), self.eval(node[2], env))
         if t == 'call':
@@ -375,6 +387,10 @@ class Interp:
             if i < -len(obj) or i >= len(obj):
                 raise HanError(f"색인 범위 오류: {i}")
             return obj[i]
+        if isinstance(obj, dict):
+            if i not in obj:
+                raise HanError(f"키 없음: {문자열화(i)}")
+            return obj[i]
         raise HanError("색인할 수 없는 값입니다")
 
     def _index_set(self, obj, i, v):
@@ -383,6 +399,9 @@ class Interp:
                 raise HanError("색인은 정수여야 합니다")
             if i < -len(obj) or i >= len(obj):
                 raise HanError(f"색인 범위 오류: {i}")
+            obj[i] = v
+            return
+        if isinstance(obj, dict):       # 사전은 새 키 대입 허용
             obj[i] = v
             return
         raise HanError("색인 대입할 수 없는 값입니다")

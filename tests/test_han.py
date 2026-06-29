@@ -67,6 +67,23 @@ def test_list_truthiness_and_oob():
         pass
 
 
+def test_dict_literal_and_index():
+    assert run('사람 = {"이름": "홍길동", "나이": 20}\n출력(사람["이름"])\n출력(사람["나이"] + 5)') == "홍길동\n25\n"
+
+
+def test_dict_setindex_new_key():
+    src = '사전 = {}\n사전["가"] = 1\n사전["나"] = 2\n사전["가"] = 9\n출력(사전["가"] + 사전["나"])\n출력(길이(사전))'
+    assert run(src) == "11\n2\n"
+
+
+def test_dict_missing_key_errors():
+    try:
+        run('출력({"a": 1}["없는키"])')
+        assert False, "키 없음 오류가 나야 함"
+    except Exception:
+        pass
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
