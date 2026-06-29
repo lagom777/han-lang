@@ -251,8 +251,16 @@ class Parser:
                         self.eat()
                 self.eat('OP', ')'); node = ('call', node, args)
             elif self.at('OP', '['):
-                self.eat('OP', '['); idx = self.expr(); self.eat('OP', ']')
-                node = ('index', node, idx)
+                self.eat('OP', '[')
+                start = None if self.at('OP', ':') else self.expr()
+                if self.at('OP', ':'):              # 슬라이스 [시작:끝]
+                    self.eat('OP', ':')
+                    end = None if self.at('OP', ']') else self.expr()
+                    self.eat('OP', ']')
+                    node = ('slice', node, start, end)
+                else:
+                    self.eat('OP', ']')
+                    node = ('index', node, start)
             else:
                 break
         return node
@@ -491,6 +499,13 @@ class Interp:
             return Func('<람다>', node[1], node[2], env)
         if t == 'index':
             return self._index_get(self.eval(node[1], env), self.eval(node[2], env))
+        if t == 'slice':
+            obj = self.eval(node[1], env)
+            s = self.eval(node[2], env) if node[2] is not None else None
+            e = self.eval(node[3], env) if node[3] is not None else None
+            if isinstance(obj, (list, str)):
+                return obj[s:e]
+            raise HanError("자를 수 없는 값입니다 (목록·문자열만)")
         if t == 'call':
             return self.call(node, env)
         raise HanError(f"실행 오류: 알 수 없는 식 {t}")

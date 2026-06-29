@@ -238,6 +238,14 @@ def test_compound_assign():
     assert run('목록 = [1, 2, 3]\n목록[1] += 10\n출력(목록)') == "[1, 12, 3]\n"
 
 
+def test_slice():
+    assert run('출력([1, 2, 3, 4, 5][1:3])') == "[2, 3]\n"
+    assert run('출력("한국어"[0:2])') == "한국\n"
+    assert run('출력([1, 2, 3, 4][2:])') == "[3, 4]\n"
+    assert run('출력([1, 2, 3, 4][:2])') == "[1, 2]\n"
+    assert run('출력("프로그램"[-2:])') == "그램\n"
+
+
 def test_all_examples_run():
     # 모든 examples/*.han 이 오류 없이 실행되는지(회귀 방지)
     import glob
