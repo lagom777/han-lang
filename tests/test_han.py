@@ -201,6 +201,16 @@ def test_lambda_higher_order():
     assert run(src) == "11\n"
 
 
+def test_math_builtins():
+    assert run('출력(절댓값(-5))') == "5\n"
+    assert run('출력(반올림(3.7))') == "4\n"
+    assert run('출력(반올림(3.14159, 2))') == "3.14\n"
+    assert run('출력(올림(2.1))') == "3\n"
+    assert run('출력(내림(2.9))') == "2\n"
+    assert run('출력(제곱근(9))') == "3\n"
+    assert run('출력(거듭제곱(2, 10))') == "1024\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

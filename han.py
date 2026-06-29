@@ -11,6 +11,7 @@
 """
 import sys
 import os
+import math
 import json as _json
 import urllib.request
 
@@ -693,6 +694,30 @@ def _타입(interp, args):           # 값의 타입 이름
     return '알수없음'
 
 
+def _절댓값(interp, args):
+    return abs(args[0])
+
+
+def _반올림(interp, args):          # 반올림(수[, 소수자리])
+    return round(args[0], int(args[1])) if len(args) > 1 else round(args[0])
+
+
+def _올림(interp, args):
+    return math.ceil(args[0])
+
+
+def _내림(interp, args):
+    return math.floor(args[0])
+
+
+def _제곱근(interp, args):
+    return math.sqrt(args[0])
+
+
+def _거듭제곱(interp, args):        # 거듭제곱(밑, 지수)
+    return args[0] ** args[1]
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -715,6 +740,12 @@ BUILTINS = {
     '시작': _시작,
     '끝': _끝,
     '타입': _타입,
+    '절댓값': _절댓값,
+    '반올림': _반올림,
+    '올림': _올림,
+    '내림': _내림,
+    '제곱근': _제곱근,
+    '거듭제곱': _거듭제곱,
 }
 
 
