@@ -125,6 +125,13 @@ def test_ai_질문_stub_without_key():
     assert 'AI 키 없음' in out
 
 
+def test_ai_체계질문_stub_without_key():
+    # 시스템+사용자 프롬프트. 키 없으면 마지막(사용자) 메시지를 echo하는 stub
+    os.environ.pop('OPENROUTER_API_KEY', None)
+    out = run('출력(체계질문("너는 시인이다", "바다를 한 줄로"))')
+    assert 'AI 키 없음' in out and '바다를' in out
+
+
 def test_runtime_error_has_line():
     # 런타임 오류에 행 번호가 붙는다(2번째 줄에서 미정의 변수)
     try:

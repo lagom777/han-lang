@@ -664,16 +664,15 @@ def _거꾸로(interp, args):         # 뒤집은 새 목록
     return list(reversed(args[0]))
 
 
-def _질문(interp, args):           # AI에게 묻기 — 질문(프롬프트[, 모델]). OpenRouter 경유.
-    prompt = 문자열화(args[0]) if args else ''
-    model = args[1] if len(args) > 1 else 'openai/gpt-4o-mini'
+def _ai_call(messages, model):     # 공통 OpenRouter 호출 (질문·체계질문 공유)
     key = os.environ.get('OPENROUTER_API_KEY')
     if not key:                    # 키 없으면 안내 stub(오프라인에서도 안전)
-        return '[AI 키 없음] OPENROUTER_API_KEY를 설정하면 실제 답을 받아요. (물음: ' + prompt[:30] + ')'
+        last = messages[-1]['content'] if messages else ''
+        return '[AI 키 없음] OPENROUTER_API_KEY를 설정하면 실제 답을 받아요. (물음: ' + last[:30] + ')'
     try:
         req = urllib.request.Request(
             'https://openrouter.ai/api/v1/chat/completions',
-            data=_json.dumps({'model': model, 'messages': [{'role': 'user', 'content': prompt}]}).encode('utf-8'),
+            data=_json.dumps({'model': model, 'messages': messages}).encode('utf-8'),
             headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'},
         )
         with urllib.request.urlopen(req, timeout=60) as r:
@@ -681,6 +680,22 @@ def _질문(interp, args):           # AI에게 묻기 — 질문(프롬프트[,
         return data['choices'][0]['message']['content']
     except Exception as e:
         raise HanError('AI 호출 실패: ' + str(e))
+
+
+def _질문(interp, args):           # AI에게 묻기 — 질문(프롬프트[, 모델]). OpenRouter 경유.
+    prompt = 문자열화(args[0]) if args else ''
+    model = args[1] if len(args) > 1 else 'openai/gpt-4o-mini'
+    return _ai_call([{'role': 'user', 'content': prompt}], model)
+
+
+def _체계질문(interp, args):       # 체계질문(시스템, 사용자[, 모델]) — 시스템 프롬프트로 AI 행동 제어
+    system = 문자열화(args[0]) if args else ''
+    user = 문자열화(args[1]) if len(args) > 1 else ''
+    model = args[2] if len(args) > 2 else 'openai/gpt-4o-mini'
+    return _ai_call([
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user},
+    ], model)
 
 
 def _대문자(interp, args):
@@ -802,6 +817,7 @@ BUILTINS = {
     '합치기': _합치기,
     '거꾸로': _거꾸로,
     '질문': _질문,
+    '체계질문': _체계질문,
     '대문자': _대문자,
     '소문자': _소문자,
     '다듬기': _다듬기,
