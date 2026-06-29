@@ -813,6 +813,13 @@ def _거르기(interp, args):         # 거르기(목록, 함수) → 함수가 
     return [x for x in args[0] if 참인가(interp.apply_func(args[1], [x]))]
 
 
+def _접기(interp, args):           # 접기(목록, 초기값, 함수(누적,원소)) → 하나로 누적 (reduce)
+    acc = args[1]
+    for x in args[0]:
+        acc = interp.apply_func(args[2], [acc, x])
+    return acc
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -850,6 +857,7 @@ BUILTINS = {
     '제이슨문자열': _제이슨문자열,
     '변환': _변환,
     '거르기': _거르기,
+    '접기': _접기,
 }
 
 
