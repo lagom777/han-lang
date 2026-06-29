@@ -238,6 +238,27 @@ def test_compound_assign():
     assert run('목록 = [1, 2, 3]\n목록[1] += 10\n출력(목록)') == "[1, 12, 3]\n"
 
 
+def test_all_examples_run():
+    # 모든 examples/*.han 이 오류 없이 실행되는지(회귀 방지)
+    import glob
+    os.environ.pop('OPENROUTER_API_KEY', None)   # ai.han → 안내 stub 경로
+    exdir = os.path.join(ROOT, 'examples')
+    paths = sorted(glob.glob(os.path.join(exdir, '*.han')))
+    assert len(paths) >= 10
+    old = sys.stdin
+    try:
+        for path in paths:
+            sys.stdin = io.StringIO("홍길동\n30\n40\n50\n")  # input.han 용
+            with open(path, encoding='utf-8') as f:
+                src = f.read()
+            try:
+                실행소스(src, out=io.StringIO(), base_dir=exdir)
+            except Exception as e:
+                raise AssertionError(os.path.basename(path) + " 실행 실패: " + str(e))
+    finally:
+        sys.stdin = old
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
