@@ -116,6 +116,13 @@ def test_range_for_still_works():
     assert run('반복 i 를 1 부터 3 까지 { 출력(i) }') == "1\n2\n3\n"
 
 
+def test_ai_질문_stub_without_key():
+    # 키 없을 때: 실제 호출 대신 안내 stub 반환(오프라인 안전·크래시 X)
+    os.environ.pop('OPENROUTER_API_KEY', None)
+    out = run('출력(질문("안녕"))')
+    assert 'AI 키 없음' in out
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

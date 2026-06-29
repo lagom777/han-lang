@@ -10,6 +10,9 @@
   python3 han.py            # 대화형(REPL)
 """
 import sys
+import os
+import json as _json
+import urllib.request
 
 
 class HanError(Exception):
@@ -535,6 +538,25 @@ def _거꾸로(interp, args):         # 뒤집은 새 목록
     return list(reversed(args[0]))
 
 
+def _질문(interp, args):           # AI에게 묻기 — 질문(프롬프트[, 모델]). OpenRouter 경유.
+    prompt = 문자열화(args[0]) if args else ''
+    model = args[1] if len(args) > 1 else 'openai/gpt-4o-mini'
+    key = os.environ.get('OPENROUTER_API_KEY')
+    if not key:                    # 키 없으면 안내 stub(오프라인에서도 안전)
+        return '[AI 키 없음] OPENROUTER_API_KEY를 설정하면 실제 답을 받아요. (물음: ' + prompt[:30] + ')'
+    try:
+        req = urllib.request.Request(
+            'https://openrouter.ai/api/v1/chat/completions',
+            data=_json.dumps({'model': model, 'messages': [{'role': 'user', 'content': prompt}]}).encode('utf-8'),
+            headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'},
+        )
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = _json.loads(r.read().decode('utf-8'))
+        return data['choices'][0]['message']['content']
+    except Exception as e:
+        raise HanError('AI 호출 실패: ' + str(e))
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -548,6 +570,7 @@ BUILTINS = {
     '나누기': _나누기,
     '합치기': _합치기,
     '거꾸로': _거꾸로,
+    '질문': _질문,
 }
 
 
