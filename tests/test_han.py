@@ -211,6 +211,16 @@ def test_math_builtins():
     assert run('출력(거듭제곱(2, 10))') == "1024\n"
 
 
+def test_input_builtin():
+    old = sys.stdin
+    sys.stdin = io.StringIO("홍길동\n42\n")
+    try:
+        out = run('이름 = 입력("이름? ")\n나이 = 숫자(입력())\n출력(이름 + " " + (나이 + 1))')
+    finally:
+        sys.stdin = old
+    assert out == "이름? 홍길동 43\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

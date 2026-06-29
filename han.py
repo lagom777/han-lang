@@ -718,6 +718,17 @@ def _거듭제곱(interp, args):        # 거듭제곱(밑, 지수)
     return args[0] ** args[1]
 
 
+def _입력(interp, args):           # 한 줄 입력받기 — 입력([프롬프트]) → 문자열
+    if args:
+        interp.out.write(문자열화(args[0]))
+        try:
+            interp.out.flush()
+        except Exception:
+            pass
+    line = sys.stdin.readline()
+    return line.rstrip('\n') if line else ''
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -746,6 +757,7 @@ BUILTINS = {
     '내림': _내림,
     '제곱근': _제곱근,
     '거듭제곱': _거듭제곱,
+    '입력': _입력,
 }
 
 
