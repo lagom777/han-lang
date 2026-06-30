@@ -889,6 +889,18 @@ def _입력(interp, args):           # 한 줄 입력받기 — 입력([프롬�
     return line.rstrip('\n') if line else ''
 
 
+def _파일읽기(interp, args):       # 파일읽기(경로) → 파일 내용(문자열). 없거나 못 읽으면 오류
+    with open(문자열화(args[0]), encoding='utf-8') as f:
+        return f.read()
+
+
+def _파일쓰기(interp, args):       # 파일쓰기(경로, 내용) → 내용을 파일에 씀(덮어씀), 쓴 글자 수 반환
+    s = 문자열화(args[1]) if len(args) > 1 else ''
+    with open(문자열화(args[0]), 'w', encoding='utf-8') as f:
+        f.write(s)
+    return len(s)
+
+
 def _키들(interp, args):           # 사전의 키 목록
     return list(args[0].keys())
 
@@ -1132,6 +1144,8 @@ BUILTINS = {
     '제곱근': _제곱근,
     '거듭제곱': _거듭제곱,
     '입력': _입력,
+    '파일읽기': _파일읽기,
+    '파일쓰기': _파일쓰기,
     '키들': _키들,
     '값들': _값들,
     '항목들': _항목들,

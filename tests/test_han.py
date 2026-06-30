@@ -432,6 +432,18 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_file_io():
+    import tempfile, os
+    p = os.path.join(tempfile.gettempdir(), "han_io_test.txt")
+    # 쓰기는 글자 수 반환
+    assert run(f'출력(파일쓰기("{p}", "가나다"))') == "3\n"
+    # 쓴 뒤 읽으면 내용 일치
+    assert run(f'파일쓰기("{p}", "안녕 한")\n출력(파일읽기("{p}"))') == "안녕 한\n"
+    os.remove(p)
+    # 없는 파일은 오류(시도/잡기로 잡힘)
+    assert run('시도 { 파일읽기("/없는경로/xyz.txt") } 잡기(오류) { 출력("못 읽음") }') == "못 읽음\n"
+
+
 def test_gcd_lcm():
     assert run('출력(최대공약수(12, 18))') == "6\n"
     assert run('출력(최소공배수(4, 6))') == "12\n"
