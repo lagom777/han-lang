@@ -367,7 +367,17 @@ class Env:
             if name in e.vars:
                 return e.vars[name]
             e = e.parent
-        raise HanError(f"이름 오류: '{name}' 가 정의되지 않았습니다")
+        raise HanError(f"이름 오류: '{name}' 가 정의되지 않았습니다{self._제안(name)}")
+
+    def _제안(self, name):                                # 가까운 이름(변수/내장) "혹시 X?" 힌트
+        import difflib
+        후보 = set(BUILTINS.keys())
+        e = self
+        while e:
+            후보.update(e.vars.keys())
+            e = e.parent
+        가까운 = difflib.get_close_matches(name, list(후보), n=1, cutoff=0.6)
+        return f" (혹시 '{가까운[0]}'?)" if 가까운 else ""
 
     def set_existing_or_define(self, name, val):
         e = self

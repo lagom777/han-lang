@@ -432,6 +432,22 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_name_suggestion():
+    # 오타 시 가까운 이름 제안
+    try:
+        run('점수목록 = [1,2,3]\n출력(점수몰록)')  # 점수몰록 ~ 점수목록
+        assert False, "이름 오류 나야 함"
+    except Exception as e:
+        assert "정의되지 않았습니다" in str(e)
+        assert "혹시 '점수목록'?" in str(e)
+    # 가까운 게 전혀 없으면 제안 없음(기존 메시지 유지)
+    try:
+        run('출력(존재하지않는아주긴변수이름)')
+        assert False
+    except Exception as e:
+        assert "정의되지 않았습니다" in str(e) and "혹시" not in str(e)
+
+
 def test_flatten():
     assert run('출력(평탄화([[1,2],[3,4],[5]]))') == "[1, 2, 3, 4, 5]\n"
     assert run('출력(평탄화([[1],[2,3],[]]))') == "[1, 2, 3]\n"  # 빈 내부 목록

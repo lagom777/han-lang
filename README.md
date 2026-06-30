@@ -89,6 +89,7 @@ python3 tests/test_han.py                 # 테스트
 - `시도 { } 잡기(오류) { }` 로 잡고, `발생("메시지")` 로 직접 던진다.
 - 구문/렉서 오류엔 **행+열** — 예: `[1행 7열] 구문 오류: 예기치 않은 ')'`
 - 런타임 오류엔 행 번호 — 예: `[2행] 이름 오류: '없는변수' 가 정의되지 않았습니다`
+- 변수 오타엔 비슷한 이름 제안 — 예: `이름 오류: '점수몰록' ... (혹시 '점수목록'?)`
 
 ## 예제 (`examples/`)
 **flagship(종합 — 판매 데이터 분석)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random
