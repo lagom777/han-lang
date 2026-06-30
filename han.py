@@ -177,14 +177,27 @@ class Parser:
                 raise HanError("복합 대입 대상이 올바르지 않습니다")
         return ('exprstmt', node)
 
-    def func_decl(self):
-        self.eat('KW', '함수'); name = self.eat('ID').val; self.eat('OP', '(')
+    def parse_params(self):
+        # 매개변수 목록 → [(이름, 기본식 또는 None)]. 기본값 있는 건 뒤쪽에만.
+        self.eat('OP', '(')
         params = []
+        seen_default = False
         while not self.at('OP', ')'):
-            params.append(self.eat('ID').val)
+            t = self.eat('ID'); pname = t.val
+            default = None
+            if self.at('OP', '='):
+                self.eat('OP', '='); default = self.expr(); seen_default = True
+            elif seen_default:
+                raise HanError(f"[{t.line}행 {t.col}열] 기본값 있는 매개변수 뒤에는 기본값 없는 매개변수를 둘 수 없습니다")
+            params.append((pname, default))
             if self.at('OP', ','):
                 self.eat()
         self.eat('OP', ')')
+        return params
+
+    def func_decl(self):
+        self.eat('KW', '함수'); name = self.eat('ID').val
+        params = self.parse_params()
         return ('func', name, params, self.block())
 
     def if_stmt(self):
@@ -313,13 +326,8 @@ class Parser:
                     self.eat()
             self.eat('OP', '}'); return ('dict', pairs)
         if t.kind == 'KW' and t.val == '람다':       # 익명 함수 람다(매개변수){ 본문 }
-            self.eat('KW', '람다'); self.eat('OP', '(')
-            params = []
-            while not self.at('OP', ')'):
-                params.append(self.eat('ID').val)
-                if self.at('OP', ','):
-                    self.eat()
-            self.eat('OP', ')')
+            self.eat('KW', '람다')
+            params = self.parse_params()
             return ('lambda', params, self.block())
         raise HanError(f"[{t.line}행 {t.col}열] 구문 오류: 예기치 않은 '{t.val}'")
 
@@ -612,11 +620,14 @@ class Interp:
     def apply_func(self, fn, args):      # 값 인자로 Func 호출 (call·고차 내장함수 공유)
         if not isinstance(fn, Func):
             raise HanError("호출 오류: 함수가 아닙니다")
-        if len(args) != len(fn.params):
-            raise HanError(f"호출 오류: '{fn.name}' 는 인자 {len(fn.params)}개가 필요(받음 {len(args)}개)")
+        params = fn.params
+        required = sum(1 for (_, d) in params if d is None)
+        if len(args) < required or len(args) > len(params):
+            need = str(required) if required == len(params) else f"{required}~{len(params)}"
+            raise HanError(f"호출 오류: '{fn.name}' 는 인자 {need}개가 필요(받음 {len(args)}개)")
         local = Env(fn.env)
-        for name, val in zip(fn.params, args):
-            local.vars[name] = val
+        for i, (pname, default) in enumerate(params):
+            local.vars[pname] = args[i] if i < len(args) else self.eval(default, local)
         try:
             self.exec_block(fn.body, local)
         except Return as r:

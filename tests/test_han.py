@@ -377,6 +377,28 @@ def test_foreach_index():
         assert "인덱스" in str(e)
 
 
+def test_default_params():
+    fn = '함수 인사(이름, 말="안녕") { 반환 말 + ", " + 이름 }\n'
+    assert run(fn + '출력(인사("한"))') == "안녕, 한\n"          # 기본값
+    assert run(fn + '출력(인사("한", "반가워"))') == "반가워, 한\n"  # 덮어쓰기
+    # 람다도 기본값
+    lam = '제곱 = 람다(x, 배수=1) { 반환 x * x * 배수 }\n'
+    assert run(lam + '출력(제곱(3))') == "9\n"
+    assert run(lam + '출력(제곱(3, 2))') == "18\n"
+    # 필수 인자 누락 → 오류
+    try:
+        run('함수 더(가, 나) { 반환 가 + 나 }\n출력(더(1))')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert "인자" in str(e)
+    # 기본값 뒤 필수 매개변수 → 구문 오류
+    try:
+        run('함수 나쁨(가=1, 나) { 반환 가 }\n나쁨(1)')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert "기본값" in str(e)
+
+
 def test_json():
     # 파싱: JSON 문자열 → 값
     assert run('자료 = 제이슨파싱("{\\"이름\\": \\"한\\", \\"나이\\": 1}")\n출력(자료["이름"])') == "한\n"
