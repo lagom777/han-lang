@@ -935,6 +935,32 @@ def _오른쪽채우기(interp, args):   # 오른쪽채우기(값, 너비[, 채�
     return s.ljust(int(args[1]), fill[0] if fill else ' ')
 
 
+def _교집합(interp, args):         # 교집합(가, 나) → 가에 있으면서 나에도 있는 원소(가 순서, 중복 제거)
+    나 = args[1]
+    out = []
+    for x in args[0]:
+        if x in 나 and x not in out:
+            out.append(x)
+    return out
+
+
+def _합집합(interp, args):         # 합집합(가, 나) → 가와 나의 모든 원소(중복 제거, 가 먼저)
+    out = []
+    for x in list(args[0]) + list(args[1]):
+        if x not in out:
+            out.append(x)
+    return out
+
+
+def _차집합(interp, args):         # 차집합(가, 나) → 가에 있고 나엔 없는 원소(가 순서, 중복 제거)
+    나 = args[1]
+    out = []
+    for x in args[0]:
+        if x not in 나 and x not in out:
+            out.append(x)
+    return out
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -988,6 +1014,9 @@ BUILTINS = {
     '발생': _발생,
     '왼쪽채우기': _왼쪽채우기,
     '오른쪽채우기': _오른쪽채우기,
+    '교집합': _교집합,
+    '합집합': _합집합,
+    '차집합': _차집합,
 }
 
 
