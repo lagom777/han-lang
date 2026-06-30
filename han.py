@@ -861,6 +861,10 @@ def _개수(interp, args):           # 개수(목록, 값) → 값이 목록에 
     return args[0].count(args[1])
 
 
+def _묶기(interp, args):           # 묶기(목록1, 목록2) → [[a,b], ...] (짧은 쪽 길이까지)
+    return [[a, b] for a, b in zip(args[0], args[1])]
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -906,6 +910,7 @@ BUILTINS = {
     '모두': _모두,
     '고유': _고유,
     '개수': _개수,
+    '묶기': _묶기,
 }
 
 
