@@ -432,6 +432,13 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_thousands():
+    assert run('출력(천단위(1234567))') == "1,234,567\n"
+    assert run('출력(천단위(1000))') == "1,000\n"
+    assert run('출력(천단위(999))') == "999\n"
+    assert run('출력(천단위(-12345))') == "-12,345\n"
+
+
 def test_dict_key_suggestion():
     # 키 오타 → 가까운 키 제안
     try:

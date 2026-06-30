@@ -835,6 +835,10 @@ def _반올림(interp, args):          # 반올림(수[, 소수자리])
     return round(args[0], int(args[1])) if len(args) > 1 else round(args[0])
 
 
+def _천단위(interp, args):          # 천단위(숫자) → 천 단위 콤마 문자열 (예: 1234567 → "1,234,567")
+    return f"{args[0]:,}"
+
+
 def _올림(interp, args):
     return math.ceil(args[0])
 
@@ -1090,6 +1094,7 @@ BUILTINS = {
     '타입': _타입,
     '절댓값': _절댓값,
     '반올림': _반올림,
+    '천단위': _천단위,
     '올림': _올림,
     '내림': _내림,
     '제곱근': _제곱근,
