@@ -901,6 +901,13 @@ def _파일쓰기(interp, args):       # 파일쓰기(경로, 내용) → 내용
     return len(s)
 
 
+def _이어쓰기(interp, args):       # 이어쓰기(경로, 내용) → 파일 끝에 덧붙임(없으면 생성), 쓴 글자 수 (로그 누적)
+    s = 문자열화(args[1]) if len(args) > 1 else ''
+    with open(문자열화(args[0]), 'a', encoding='utf-8') as f:
+        f.write(s)
+    return len(s)
+
+
 def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → 값, 없으면 기본값(미지정 시 없음)
     name = 문자열화(args[0]) if args else ''
     return os.environ.get(name, args[1] if len(args) > 1 else None)
@@ -1151,6 +1158,7 @@ BUILTINS = {
     '입력': _입력,
     '파일읽기': _파일읽기,
     '파일쓰기': _파일쓰기,
+    '이어쓰기': _이어쓰기,
     '환경변수': _환경변수,
     '키들': _키들,
     '값들': _값들,

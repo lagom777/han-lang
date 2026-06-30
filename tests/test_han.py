@@ -443,6 +443,17 @@ def test_env():
         del os.environ["HAN_TEST_VAR"]
 
 
+def test_append():
+    import tempfile, os
+    p = os.path.join(tempfile.gettempdir(), "han_append.txt")
+    if os.path.exists(p):
+        os.remove(p)
+    assert run(f'출력(이어쓰기("{p}", "가"))') == "1\n"  # 없으면 생성, 1글자
+    run(f'이어쓰기("{p}", "나다")')                       # 덧붙임
+    assert run(f'출력(파일읽기("{p}"))') == "가나다\n"     # 덮어쓰지 않고 이어짐
+    os.remove(p)
+
+
 def test_file_io():
     import tempfile, os
     p = os.path.join(tempfile.gettempdir(), "han_io_test.txt")
