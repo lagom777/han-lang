@@ -833,6 +833,17 @@ def _항목들(interp, args):         # 사전의 [키, 값] 목록
     return [[k, v] for k, v in args[0].items()]
 
 
+def _값얻기(interp, args):         # 값얻기(사전, 키[, 기본값]) → 키 있으면 값, 없으면 기본값(기본 미지정 시 없음)
+    d, k = args[0], args[1]
+    if isinstance(d, dict) and k in d:
+        return d[k]
+    return args[2] if len(args) > 2 else None
+
+
+def _키있나(interp, args):         # 키있나(사전, 키) → 키 존재 여부(참/거짓)
+    return isinstance(args[0], dict) and args[1] in args[0]
+
+
 def _제이슨파싱(interp, args):      # JSON 문자열 → 값 (LLM 출력·API 응답)
     return _json.loads(args[0])
 
@@ -1018,6 +1029,8 @@ BUILTINS = {
     '키들': _키들,
     '값들': _값들,
     '항목들': _항목들,
+    '값얻기': _값얻기,
+    '키있나': _키있나,
     '제이슨파싱': _제이슨파싱,
     '제이슨문자열': _제이슨문자열,
     '변환': _변환,
