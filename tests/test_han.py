@@ -432,6 +432,13 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_gcd_lcm():
+    assert run('출력(최대공약수(12, 18))') == "6\n"
+    assert run('출력(최소공배수(4, 6))') == "12\n"
+    assert run('출력(최대공약수(17, 5))') == "1\n"   # 서로소
+    assert run('출력(최소공배수(0, 5))') == "0\n"     # 0 포함
+
+
 def test_generate():
     assert run('출력(생성(5, 람다(i){ 반환 i * i }))') == "[0, 1, 4, 9, 16]\n"
     assert run('출력(생성(3, 람다(i){ 반환 (i + 1) * 10 }))') == "[10, 20, 30]\n"

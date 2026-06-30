@@ -853,6 +853,15 @@ def _사이값(interp, args):          # 사이값(값, 최소, 최대) → 값�
     return lo if v < lo else hi if v > hi else v
 
 
+def _최대공약수(interp, args):      # 최대공약수(가, 나) → GCD
+    return math.gcd(int(args[0]), int(args[1]))
+
+
+def _최소공배수(interp, args):      # 최소공배수(가, 나) → LCM (둘 중 0이면 0)
+    a, b = int(args[0]), int(args[1])
+    return abs(a * b) // math.gcd(a, b) if a and b else 0
+
+
 def _올림(interp, args):
     return math.ceil(args[0])
 
@@ -1116,6 +1125,8 @@ BUILTINS = {
     '반올림': _반올림,
     '천단위': _천단위,
     '사이값': _사이값,
+    '최대공약수': _최대공약수,
+    '최소공배수': _최소공배수,
     '올림': _올림,
     '내림': _내림,
     '제곱근': _제곱근,
