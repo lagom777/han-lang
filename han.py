@@ -707,6 +707,15 @@ def _중앙값(interp, args):         # 중앙값(목록) → 정렬 후 가운�
     return items[mid] if n % 2 == 1 else (items[mid - 1] + items[mid]) / 2
 
 
+def _표준편차(interp, args):       # 표준편차(목록) → 모표준편차(분산의 제곱근). 빈 목록은 0
+    items = args[0]
+    if not items:
+        return 0
+    m = sum(items) / len(items)
+    var = sum((x - m) ** 2 for x in items) / len(items)
+    return math.sqrt(var)
+
+
 def _정렬(interp, args):           # 정렬된 새 목록
     return sorted(args[0])
 
@@ -1148,6 +1157,7 @@ BUILTINS = {
     '합': _합,
     '평균': _평균,
     '중앙값': _중앙값,
+    '표준편차': _표준편차,
     '정렬': _정렬,
     '최대': _최대,
     '최소': _최소,
