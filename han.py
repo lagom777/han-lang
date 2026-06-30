@@ -834,6 +834,21 @@ def _정렬기준(interp, args):       # 정렬기준(목록, 키함수) → 키
     return sorted(args[0], key=lambda x: interp.apply_func(args[1], [x]))
 
 
+def _찾기(interp, args):           # 찾기(목록, 함수) → 함수가 참인 첫 원소, 없으면 없음 (find)
+    for x in args[0]:
+        if 참인가(interp.apply_func(args[1], [x])):
+            return x
+    return None
+
+
+def _있나(interp, args):           # 있나(목록, 함수) → 하나라도 참이면 참 (any)
+    return any(참인가(interp.apply_func(args[1], [x])) for x in args[0])
+
+
+def _모두(interp, args):           # 모두(목록, 함수) → 전부 참이면 참 (all)
+    return all(참인가(interp.apply_func(args[1], [x])) for x in args[0])
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -874,6 +889,9 @@ BUILTINS = {
     '접기': _접기,
     '서식': _서식,
     '정렬기준': _정렬기준,
+    '찾기': _찾기,
+    '있나': _있나,
+    '모두': _모두,
 }
 
 
