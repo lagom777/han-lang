@@ -432,6 +432,19 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_mean_median():
+    assert run('출력(평균([1, 2, 3, 4]))') == "2.5\n"
+    assert run('출력(평균([2, 4, 6]))') == "4\n"            # 정수형 결과는 정수로
+    assert run('출력(중앙값([3, 1, 2]))') == "2\n"          # 정렬 후 가운데(홀수)
+    assert run('출력(중앙값([1, 2, 3, 4]))') == "2.5\n"     # 짝수면 가운데 둘 평균
+    # 빈 목록은 오류
+    try:
+        run('평균([])')
+        assert False, "빈 목록 오류 나야 함"
+    except Exception:
+        pass
+
+
 def test_dict_get():
     assert run('출력(값얻기({"가":1,"나":2}, "가"))') == "1\n"
     assert run('출력(값얻기({"가":1}, "없는키", 0))') == "0\n"      # 기본값

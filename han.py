@@ -670,6 +670,22 @@ def _합(interp, args):             # 목록 원소 합
     return sum(args[0])
 
 
+def _평균(interp, args):           # 평균(목록) → 산술 평균(빈 목록 오류)
+    items = args[0]
+    if not items:
+        raise HanError('평균: 빈 목록')
+    return sum(items) / len(items)
+
+
+def _중앙값(interp, args):         # 중앙값(목록) → 정렬 후 가운데 값(짝수 개면 가운데 두 값의 평균)
+    items = sorted(args[0])
+    n = len(items)
+    if n == 0:
+        raise HanError('중앙값: 빈 목록')
+    mid = n // 2
+    return items[mid] if n % 2 == 1 else (items[mid - 1] + items[mid]) / 2
+
+
 def _정렬(interp, args):           # 정렬된 새 목록
     return sorted(args[0])
 
@@ -1002,6 +1018,8 @@ BUILTINS = {
     '숫자': _숫자,
     '추가': _추가,
     '합': _합,
+    '평균': _평균,
+    '중앙값': _중앙값,
     '정렬': _정렬,
     '최대': _최대,
     '최소': _최소,
