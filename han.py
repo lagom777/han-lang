@@ -849,6 +849,18 @@ def _모두(interp, args):           # 모두(목록, 함수) → 전부 참이�
     return all(참인가(interp.apply_func(args[1], [x])) for x in args[0])
 
 
+def _고유(interp, args):           # 고유(목록) → 중복 제거(첫 등장 순서 유지)
+    out = []
+    for x in args[0]:
+        if x not in out:
+            out.append(x)
+    return out
+
+
+def _개수(interp, args):           # 개수(목록, 값) → 값이 목록에 나오는 횟수
+    return args[0].count(args[1])
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -892,6 +904,8 @@ BUILTINS = {
     '찾기': _찾기,
     '있나': _있나,
     '모두': _모두,
+    '고유': _고유,
+    '개수': _개수,
 }
 
 
