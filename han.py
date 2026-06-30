@@ -968,6 +968,16 @@ def _묶음(interp, args):           # 묶음(목록, 크기) → 크기씩 자�
     return [items[i:i + n] for i in range(0, len(items), n)]
 
 
+def _평탄화(interp, args):         # 평탄화(목록) → 한 단계 펼침 (내부 목록은 풀고, 그 외는 그대로)
+    out = []
+    for x in args[0]:
+        if isinstance(x, list):
+            out.extend(x)
+        else:
+            out.append(x)
+    return out
+
+
 def _묶기(interp, args):           # 묶기(목록1, 목록2) → [[a,b], ...] (짧은 쪽 길이까지)
     return [[a, b] for a, b in zip(args[0], args[1])]
 
@@ -1085,6 +1095,7 @@ BUILTINS = {
     '개수': _개수,
     '빈도': _빈도,
     '묶음': _묶음,
+    '평탄화': _평탄화,
     '묶기': _묶기,
     '무작위': _무작위,
     '무작위정수': _무작위정수,
