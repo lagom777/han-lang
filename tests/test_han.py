@@ -432,6 +432,12 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_generate():
+    assert run('출력(생성(5, 람다(i){ 반환 i * i }))') == "[0, 1, 4, 9, 16]\n"
+    assert run('출력(생성(3, 람다(i){ 반환 (i + 1) * 10 }))') == "[10, 20, 30]\n"
+    assert run('출력(생성(0, 람다(i){ 반환 i }))') == "[]\n"  # 빈 생성
+
+
 def test_clamp():
     assert run('출력(사이값(5, 0, 10))') == "5\n"      # 범위 안 → 그대로
     assert run('출력(사이값(-3, 0, 10))') == "0\n"      # 하한
