@@ -95,7 +95,7 @@ python3 tests/test_han.py                 # 테스트
 - 사전 키 오타엔 비슷한 키 제안 / 없으면 키 목록 — 예: `키 없음: 최고점쑤 (혹시 '최고점수'?)`
 
 ## 예제 (`examples/`)
-**flagship(종합 — 판매 데이터 분석)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random
+**flagship(종합 — 판매 데이터 분석)** · **flagship_pipeline(실전 — 파일 읽기→분석→리포트 쓰기)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random
 
 ## 로드맵 (빌드 루프로 확장)
 표준 라이브러리 확충 · 더 풍부한 오류(열 위치) · 패키지/네임스페이스 · (장기) 셀프호스팅·네이티브 백엔드.

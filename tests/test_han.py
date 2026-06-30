@@ -639,6 +639,18 @@ def test_flagship_example():
     assert '"분류"' in s and '"전자"' in s  # JSON 요약
 
 
+def test_flagship_pipeline_example():
+    # 실전 파이프라인 — 파일 I/O + JSON + toolkit 결합(쓰기→읽기→분석→쓰기→읽기)
+    with open(os.path.join(ROOT, "examples", "flagship_pipeline.han"), encoding="utf-8") as f:
+        src = f.read()
+    out = io.StringIO()
+    실행소스(src, out=out, base_dir=os.path.join(ROOT, "examples"))
+    s = out.getvalue()
+    assert "총매출: 1,535,000원" in s  # 접기 + 천단위
+    assert "베스트셀러: 노트북" in s    # 최대기준(argmax)
+    assert '"전자"' in s               # 빈도 → JSON 요약
+
+
 def test_all_examples_run():
     # 모든 examples/*.han 이 오류 없이 실행되는지(회귀 방지)
     import glob
