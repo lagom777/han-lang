@@ -820,6 +820,16 @@ def _접기(interp, args):           # 접기(목록, 초기값, 함수(누적,�
     return acc
 
 
+def _서식(interp, args):           # 서식(틀, ...값) — 틀의 {} 를 값으로 순서대로 치환
+    template = 문자열화(args[0]) if args else ''
+    vals = args[1:]
+    parts = template.split('{}')
+    result = parts[0]
+    for k in range(1, len(parts)):
+        result += (문자열화(vals[k - 1]) if k - 1 < len(vals) else '{}') + parts[k]
+    return result
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -858,6 +868,7 @@ BUILTINS = {
     '변환': _변환,
     '거르기': _거르기,
     '접기': _접기,
+    '서식': _서식,
 }
 
 
