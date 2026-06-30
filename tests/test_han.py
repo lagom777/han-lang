@@ -432,6 +432,21 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_dict_key_suggestion():
+    # 키 오타 → 가까운 키 제안
+    try:
+        run('사전 = {"점수목록": [1]}\n사전["점수몰록"]')
+        assert False, "키 없음 나야 함"
+    except Exception as e:
+        assert "키 없음" in str(e) and "혹시 '점수목록'?" in str(e)
+    # 가까운 게 없으면 있는 키 나열
+    try:
+        run('사전 = {"이름": "철수", "나이": 30}\n사전["직업"]')
+        assert False
+    except Exception as e:
+        assert "있는 키" in str(e) and "이름" in str(e) and "나이" in str(e)
+
+
 def test_name_suggestion():
     # 오타 시 가까운 이름 제안
     try:

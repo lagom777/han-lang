@@ -575,9 +575,20 @@ class Interp:
             return obj[i]
         if isinstance(obj, dict):
             if i not in obj:
-                raise HanError(f"키 없음: {문자열화(i)}")
+                raise HanError(f"키 없음: {문자열화(i)}{self._키제안(obj, i)}")
             return obj[i]
         raise HanError("색인할 수 없는 값입니다")
+
+    def _키제안(self, obj, i):                            # 사전 키 오타 "혹시 X?" 또는 있는 키 나열
+        keys = [k for k in obj.keys() if isinstance(k, str)]
+        if not isinstance(i, str) or not keys:
+            return ""
+        import difflib
+        가까운 = difflib.get_close_matches(i, keys, n=1, cutoff=0.6)
+        if 가까운:
+            return f" (혹시 '{가까운[0]}'?)"
+        보임 = keys[:6]
+        return f" (있는 키: {', '.join(보임)}{'…' if len(keys) > 6 else ''})"
 
     def _index_set(self, obj, i, v):
         if isinstance(obj, list):
