@@ -848,6 +848,11 @@ def _천단위(interp, args):          # 천단위(숫자) → 천 단위 콤마
     return f"{args[0]:,}"
 
 
+def _사이값(interp, args):          # 사이값(값, 최소, 최대) → 값을 [최소,최대]로 제한 (clamp)
+    v, lo, hi = args[0], args[1], args[2]
+    return lo if v < lo else hi if v > hi else v
+
+
 def _올림(interp, args):
     return math.ceil(args[0])
 
@@ -1105,6 +1110,7 @@ BUILTINS = {
     '절댓값': _절댓값,
     '반올림': _반올림,
     '천단위': _천단위,
+    '사이값': _사이값,
     '올림': _올림,
     '내림': _내림,
     '제곱근': _제곱근,

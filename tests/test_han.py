@@ -432,6 +432,13 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_clamp():
+    assert run('출력(사이값(5, 0, 10))') == "5\n"      # 범위 안 → 그대로
+    assert run('출력(사이값(-3, 0, 10))') == "0\n"      # 하한
+    assert run('출력(사이값(15, 0, 10))') == "10\n"     # 상한
+    assert run('출력(사이값(7.5, 0, 5))') == "5\n"      # 소수도
+
+
 def test_model_select():
     # 기본 모델 조회
     assert "gpt" in run('출력(모델())')
