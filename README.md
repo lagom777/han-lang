@@ -91,7 +91,7 @@ python3 tests/test_han.py                 # 테스트
 - 런타임 오류엔 행 번호 — 예: `[2행] 이름 오류: '없는변수' 가 정의되지 않았습니다`
 
 ## 예제 (`examples/`)
-hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json
+**flagship(종합 — 판매 데이터 분석)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random
 
 ## 로드맵 (빌드 루프로 확장)
 표준 라이브러리 확충 · 더 풍부한 오류(열 위치) · 패키지/네임스페이스 · (장기) 셀프호스팅·네이티브 백엔드.

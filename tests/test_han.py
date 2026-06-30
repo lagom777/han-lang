@@ -458,6 +458,19 @@ def test_slice():
     assert run('출력("프로그램"[-2:])') == "그램\n"
 
 
+def test_flagship_example():
+    # 종합 예제 — 전 toolkit 결합(판매 분석)이 기대 출력을 낸다
+    with open(os.path.join(ROOT, "examples", "flagship.han"), encoding="utf-8") as f:
+        src = f.read()
+    out = io.StringIO()
+    실행소스(src, out=out, base_dir=os.path.join(ROOT, "examples"))
+    s = out.getvalue()
+    assert "총매출: 8530000원" in s
+    assert "베스트셀러: 노트북" in s
+    assert "1. 노트북" in s  # 정렬·인덱스·채우기
+    assert '"분류"' in s and '"전자"' in s  # JSON 요약
+
+
 def test_all_examples_run():
     # 모든 examples/*.han 이 오류 없이 실행되는지(회귀 방지)
     import glob
