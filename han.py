@@ -682,10 +682,12 @@ def _최소(interp, args):
     return min(args[0])
 
 
-def _범위(interp, args):           # 범위(끝) 또는 범위(시작, 끝) → 목록
+def _범위(interp, args):           # 범위(끝) | 범위(시작,끝) | 범위(시작,끝,간격) → 목록
     if len(args) == 1:
         return list(range(int(args[0])))
-    return list(range(int(args[0]), int(args[1])))
+    if len(args) == 2:
+        return list(range(int(args[0]), int(args[1])))
+    return list(range(int(args[0]), int(args[1]), int(args[2])))
 
 
 def _나누기(interp, args):         # 문자열 나누기 → 목록
