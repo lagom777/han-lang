@@ -141,6 +141,26 @@ def test_runtime_error_has_line():
         assert '2행' in str(e)
 
 
+def test_syntax_error_has_column():
+    # 구문 오류에 행+열 위치가 붙는다
+    try:
+        run('출력(1 +)')  # ')' 자리에 식이 와야 함
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        s = str(e)
+        assert '행' in s and '열' in s
+
+
+def test_lex_error_has_column():
+    # 렉서 오류(알 수 없는 문자)도 행+열 — 2행 5열의 '@'
+    try:
+        run('가 = 1\n나 = @')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        s = str(e)
+        assert '2행' in s and '5열' in s
+
+
 def test_module_import():
     # 다른 .han 파일의 함수/변수를 가져와 사용
     out = run('가져오기 "examples/lib.han"\n출력(곱하기(6, 7))\n출력(제곱(5))')

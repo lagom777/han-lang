@@ -82,7 +82,8 @@ python3 tests/test_han.py                 # 테스트
 - **AI**: `질문(프롬프트[, 모델])` · `체계질문(시스템, 사용자[, 모델])` — OpenRouter LLM 호출 (`OPENROUTER_API_KEY` 필요, 없으면 안내)
 
 ## 오류 메시지
-런타임 오류에 행 번호가 붙는다 — 예: `[2행] 이름 오류: '없는변수' 가 정의되지 않았습니다`
+- 구문/렉서 오류엔 **행+열** — 예: `[1행 7열] 구문 오류: 예기치 않은 ')'`
+- 런타임 오류엔 행 번호 — 예: `[2행] 이름 오류: '없는변수' 가 정의되지 않았습니다`
 
 ## 예제 (`examples/`)
 hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json

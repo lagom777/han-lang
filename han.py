@@ -30,25 +30,27 @@ OPS = ['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '+', '-', '*', '/', '%', 
 
 
 class Tok:
-    __slots__ = ('kind', 'val', 'line')
+    __slots__ = ('kind', 'val', 'line', 'col')
 
-    def __init__(self, kind, val, line):
-        self.kind, self.val, self.line = kind, val, line
+    def __init__(self, kind, val, line, col=0):
+        self.kind, self.val, self.line, self.col = kind, val, line, col
 
 
 def lex(src):
     toks = []
     i, line, n = 0, 1, len(src)
+    bol = 0                                             # 현재 줄 시작 인덱스 (열 = i - bol + 1)
     while i < n:
         ch = src[i]
         if ch == '\n':
-            line += 1; i += 1; continue
+            line += 1; i += 1; bol = i; continue
         if ch in ' \t\r':
             i += 1; continue
         if ch == '#':                                   # 주석
             while i < n and src[i] != '\n':
                 i += 1
             continue
+        col = i - bol + 1                               # 토큰 시작 열
         if ch == '"':                                   # 문자열
             i += 1; buf = []
             while i < n and src[i] != '"':
@@ -58,8 +60,8 @@ def lex(src):
                 else:
                     buf.append(src[i]); i += 1
             if i >= n:
-                raise HanError(f"[{line}행] 문자열이 닫히지 않았습니다")
-            i += 1; toks.append(Tok('STR', ''.join(buf), line)); continue
+                raise HanError(f"[{line}행 {col}열] 문자열이 닫히지 않았습니다")
+            i += 1; toks.append(Tok('STR', ''.join(buf), line, col)); continue
         if ch.isdigit():                                # 숫자
             j, dot = i, False
             while j < n and (src[j].isdigit() or (src[j] == '.' and not dot)):
@@ -67,19 +69,19 @@ def lex(src):
                     dot = True
                 j += 1
             text = src[i:j]
-            toks.append(Tok('NUM', float(text) if dot else int(text), line)); i = j; continue
+            toks.append(Tok('NUM', float(text) if dot else int(text), line, col)); i = j; continue
         if ch == '_' or ch.isalpha():                   # 식별자/키워드 (한글 포함)
             j = i
             while j < n and (src[j] == '_' or src[j].isalnum()):
                 j += 1
             word = src[i:j]; i = j
-            toks.append(Tok('KW' if word in KEYWORDS else 'ID', word, line)); continue
+            toks.append(Tok('KW' if word in KEYWORDS else 'ID', word, line, col)); continue
         for text in OPS:                                # 연산자(긴 것 우선)
             if src.startswith(text, i):
-                toks.append(Tok('OP', text, line)); i += len(text); break
+                toks.append(Tok('OP', text, line, col)); i += len(text); break
         else:
-            raise HanError(f"[{line}행] 알 수 없는 문자: '{ch}'")
-    toks.append(Tok('EOF', None, line))
+            raise HanError(f"[{line}행 {col}열] 알 수 없는 문자: '{ch}'")
+    toks.append(Tok('EOF', None, line, i - bol + 1))
     return toks
 
 
@@ -98,7 +100,7 @@ class Parser:
     def eat(self, kind=None, val=None):
         t = self.toks[self.p]
         if kind and (t.kind != kind or (val is not None and t.val != val)):
-            raise HanError(f"[{t.line}행] 구문 오류: '{val or kind}' 자리에 '{t.val}'")
+            raise HanError(f"[{t.line}행 {t.col}열] 구문 오류: '{val or kind}' 자리에 '{t.val}'")
         self.p += 1
         return t
 
@@ -127,7 +129,7 @@ class Parser:
             self.eat('KW', '가져오기')
             t = self.peek()
             if t.kind != 'STR':
-                raise HanError(f"[{t.line}행] 가져오기 뒤에는 \"경로\" 문자열이 필요합니다")
+                raise HanError(f"[{t.line}행 {t.col}열] 가져오기 뒤에는 \"경로\" 문자열이 필요합니다")
             self.eat()
             return ('import', t.val)
         if self.at('KW', '멈춤'):
@@ -312,7 +314,7 @@ class Parser:
                     self.eat()
             self.eat('OP', ')')
             return ('lambda', params, self.block())
-        raise HanError(f"[{t.line}행] 구문 오류: 예기치 않은 '{t.val}'")
+        raise HanError(f"[{t.line}행 {t.col}열] 구문 오류: 예기치 않은 '{t.val}'")
 
 
 # ============================================================ 인터프리터
