@@ -908,6 +908,10 @@ def _이어쓰기(interp, args):       # 이어쓰기(경로, 내용) → 파일
     return len(s)
 
 
+def _파일존재(interp, args):       # 파일존재(경로) → 참/거짓 (파일·디렉터리 존재 여부)
+    return os.path.exists(문자열화(args[0]))
+
+
 def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → 값, 없으면 기본값(미지정 시 없음)
     name = 문자열화(args[0]) if args else ''
     return os.environ.get(name, args[1] if len(args) > 1 else None)
@@ -1164,6 +1168,7 @@ BUILTINS = {
     '파일읽기': _파일읽기,
     '파일쓰기': _파일쓰기,
     '이어쓰기': _이어쓰기,
+    '파일존재': _파일존재,
     '환경변수': _환경변수,
     '지금': _지금,
     '키들': _키들,

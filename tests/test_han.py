@@ -449,6 +449,17 @@ def test_now():
     assert run('시작 = 지금()\n끝 = 지금()\n출력(끝 >= 시작)') == "참\n"  # 경과 측정
 
 
+def test_file_exists():
+    import tempfile, os
+    p = os.path.join(tempfile.gettempdir(), "han_exists_test.txt")
+    if os.path.exists(p):
+        os.remove(p)
+    assert run(f'출력(파일존재("{p}"))') == "거짓\n"  # 없음
+    run(f'파일쓰기("{p}", "x")')
+    assert run(f'출력(파일존재("{p}"))') == "참\n"      # 생성 후 있음
+    os.remove(p)
+
+
 def test_append():
     import tempfile, os
     p = os.path.join(tempfile.gettempdir(), "han_append.txt")
