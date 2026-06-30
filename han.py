@@ -880,6 +880,13 @@ def _무작위선택(interp, args):     # 무작위선택(목록) → 목록에�
     return _random.choice(args[0])
 
 
+def _병합(interp, args):           # 병합(사전1, 사전2, ...) → 합친 새 사전(뒤가 우선, 원본 불변)
+    out = {}
+    for d in args:
+        out.update(d)
+    return out
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -929,6 +936,7 @@ BUILTINS = {
     '무작위': _무작위,
     '무작위정수': _무작위정수,
     '무작위선택': _무작위선택,
+    '병합': _병합,
 }
 
 
