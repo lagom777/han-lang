@@ -443,6 +443,12 @@ def test_env():
         del os.environ["HAN_TEST_VAR"]
 
 
+def test_now():
+    assert run('출력(타입(지금()))') == "실수\n"  # 유닉스 초(소수)
+    assert run('출력(지금() > 1600000000)') == "참\n"  # 2020년 이후
+    assert run('시작 = 지금()\n끝 = 지금()\n출력(끝 >= 시작)') == "참\n"  # 경과 측정
+
+
 def test_append():
     import tempfile, os
     p = os.path.join(tempfile.gettempdir(), "han_append.txt")

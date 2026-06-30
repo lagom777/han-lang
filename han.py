@@ -913,6 +913,11 @@ def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → �
     return os.environ.get(name, args[1] if len(args) > 1 else None)
 
 
+def _지금(interp, args):           # 지금() → 현재 유닉스 시각(초, 소수). 타임스탬프·경과 측정용
+    import time
+    return time.time()
+
+
 def _키들(interp, args):           # 사전의 키 목록
     return list(args[0].keys())
 
@@ -1160,6 +1165,7 @@ BUILTINS = {
     '파일쓰기': _파일쓰기,
     '이어쓰기': _이어쓰기,
     '환경변수': _환경변수,
+    '지금': _지금,
     '키들': _키들,
     '값들': _값들,
     '항목들': _항목들,
