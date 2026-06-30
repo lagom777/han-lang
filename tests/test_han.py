@@ -432,6 +432,12 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_string_find():
+    assert run('출력(위치("안녕하세요", "하세"))') == "2\n"   # 0부터
+    assert run('출력(위치("안녕", "없음"))') == "-1\n"        # 없으면 -1
+    assert run('출력(위치("가나다라", "가"))') == "0\n"
+
+
 def test_mean_median():
     assert run('출력(평균([1, 2, 3, 4]))') == "2.5\n"
     assert run('출력(평균([2, 4, 6]))') == "4\n"            # 정수형 결과는 정수로

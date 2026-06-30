@@ -710,6 +710,10 @@ def _나누기(interp, args):         # 문자열 나누기 → 목록
     return args[0].split(args[1]) if len(args) > 1 else args[0].split()
 
 
+def _위치(interp, args):           # 위치(문자열, 부분) → 부분의 첫 위치(0부터), 없으면 -1
+    return 문자열화(args[0]).find(문자열화(args[1]))
+
+
 def _합치기(interp, args):         # 목록 → 문자열 (구분자)
     sep = args[1] if len(args) > 1 else ''
     return sep.join(문자열화(x) for x in args[0])
@@ -1025,6 +1029,7 @@ BUILTINS = {
     '최소': _최소,
     '범위': _범위,
     '나누기': _나누기,
+    '위치': _위치,
     '합치기': _합치기,
     '거꾸로': _거꾸로,
     '질문': _질문,
