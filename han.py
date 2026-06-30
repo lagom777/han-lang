@@ -830,6 +830,10 @@ def _서식(interp, args):           # 서식(틀, ...값) — 틀의 {} 를 값
     return result
 
 
+def _정렬기준(interp, args):       # 정렬기준(목록, 키함수) → 키함수(원소) 기준 오름차순 새 목록
+    return sorted(args[0], key=lambda x: interp.apply_func(args[1], [x]))
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -869,6 +873,7 @@ BUILTINS = {
     '거르기': _거르기,
     '접기': _접기,
     '서식': _서식,
+    '정렬기준': _정렬기준,
 }
 
 
