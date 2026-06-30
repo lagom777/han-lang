@@ -8,7 +8,7 @@
 ## 실행
 ```bash
 python3 han.py 실행 examples/hello.han   # 파일 실행
-python3 han.py 대화                       # 대화형(REPL) — 여러 줄 블록 OK, 식은 값이 바로 나옴
+python3 han.py 대화                       # 대화형(REPL) — 여러 줄 블록 OK, 식은 값이 바로 나옴 (`:도움` 명령, `:종료` 끝내기)
 python3 tests/test_han.py                 # 테스트
 ```
 

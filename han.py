@@ -1170,6 +1170,18 @@ def repl_eval(interp, src):
     return None
 
 
+def repl_command(line):
+    """REPL 메타 명령(:으로 시작). 일반 코드면 None, 명령이면 (동작, 출력문자열)."""
+    cmd = line.strip()
+    if not cmd.startswith(':'):
+        return None
+    if cmd in (':종료', ':끝'):
+        return ('quit', None)
+    if cmd == ':도움':
+        return ('print', "명령: :도움(도움말) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
+    return ('print', f"알 수 없는 명령: {cmd} (:도움 으로 목록)")
+
+
 def main(argv):
     if len(argv) >= 3 and argv[1] in ('실행', 'run'):
         with open(argv[2], encoding='utf-8') as f:
@@ -1179,7 +1191,7 @@ def main(argv):
         except HanError as e:
             print(f"오류: {e}", file=sys.stderr); sys.exit(1)
     elif len(argv) == 1 or (len(argv) == 2 and argv[1] in ('repl', '대화')):
-        print("한(Han) v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. 종료는 Ctrl-D")
+        print("한(Han) v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. :도움 으로 명령, 종료는 :종료/Ctrl-D")
         interp = Interp()
         buf = ''
         while True:
@@ -1187,6 +1199,12 @@ def main(argv):
                 line = input('... ' if buf else '한> ')
             except EOFError:
                 print(); break
+            if not buf:                   # 블록 중이 아니면 메타 명령 처리(:도움 :종료)
+                c = repl_command(line)
+                if c:
+                    if c[0] == 'quit':
+                        break
+                    print(c[1]); continue
             buf = (buf + '\n' + line) if buf else line
             if not buf.strip():
                 buf = ''

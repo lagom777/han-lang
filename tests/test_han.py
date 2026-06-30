@@ -7,7 +7,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)  # 상대경로 가져오기("examples/..") 가 cwd와 무관하게 동작하도록
-from han import 실행소스, Interp, repl_eval, needs_more  # noqa: E402
+from han import 실행소스, Interp, repl_eval, needs_more, repl_command  # noqa: E402
 
 
 def run(src):
@@ -430,6 +430,15 @@ def test_raise():
         assert False, "오류가 나야 함"
     except Exception as e:
         assert "치명적" in str(e)
+
+
+def test_repl_command():
+    assert repl_command("출력(1)") is None          # 일반 코드는 명령 아님
+    assert repl_command(":종료") == ("quit", None)
+    assert repl_command(":끝") == ("quit", None)
+    action, text = repl_command(":도움")
+    assert action == "print" and "내장함수" in text and "출력" in text
+    assert repl_command(":없는명령")[0] == "print"   # 알 수 없는 명령도 안내
 
 
 def test_thousands():
