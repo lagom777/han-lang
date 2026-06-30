@@ -871,6 +871,30 @@ def _정렬기준(interp, args):       # 정렬기준(목록, 키함수) → 키
     return sorted(args[0], key=lambda x: interp.apply_func(args[1], [x]))
 
 
+def _최대기준(interp, args):       # 최대기준(목록, 키함수) → 키함수 값이 최대인 원소 (argmax)
+    items = args[0]
+    if not items:
+        raise HanError('최대기준: 빈 목록')
+    best = items[0]; bestk = interp.apply_func(args[1], [best])
+    for x in items[1:]:
+        k = interp.apply_func(args[1], [x])
+        if k > bestk:
+            best = x; bestk = k
+    return best
+
+
+def _최소기준(interp, args):       # 최소기준(목록, 키함수) → 키함수 값이 최소인 원소 (argmin)
+    items = args[0]
+    if not items:
+        raise HanError('최소기준: 빈 목록')
+    best = items[0]; bestk = interp.apply_func(args[1], [best])
+    for x in items[1:]:
+        k = interp.apply_func(args[1], [x])
+        if k < bestk:
+            best = x; bestk = k
+    return best
+
+
 def _찾기(interp, args):           # 찾기(목록, 함수) → 함수가 참인 첫 원소, 없으면 없음 (find)
     for x in args[0]:
         if 참인가(interp.apply_func(args[1], [x])):
@@ -1001,6 +1025,8 @@ BUILTINS = {
     '접기': _접기,
     '서식': _서식,
     '정렬기준': _정렬기준,
+    '최대기준': _최대기준,
+    '최소기준': _최소기준,
     '찾기': _찾기,
     '있나': _있나,
     '모두': _모두,
