@@ -1068,6 +1068,15 @@ def _평탄화(interp, args):         # 평탄화(목록) → 한 단계 펼침 
     return out
 
 
+def _누적합(interp, args):         # 누적합(목록) → 누적 합 목록 [a, a+b, a+b+c, ...] (running total)
+    out = []
+    s = 0
+    for x in args[0]:
+        s += x
+        out.append(s)
+    return out
+
+
 def _묶기(interp, args):           # 묶기(목록1, 목록2) → [[a,b], ...] (짧은 쪽 길이까지)
     return [[a, b] for a, b in zip(args[0], args[1])]
 
@@ -1200,6 +1209,7 @@ BUILTINS = {
     '묶음': _묶음,
     '평탄화': _평탄화,
     '묶기': _묶기,
+    '누적합': _누적합,
     '무작위': _무작위,
     '무작위정수': _무작위정수,
     '무작위선택': _무작위선택,

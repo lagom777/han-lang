@@ -449,6 +449,13 @@ def test_now():
     assert run('시작 = 지금()\n끝 = 지금()\n출력(끝 >= 시작)') == "참\n"  # 경과 측정
 
 
+def test_cumsum():
+    assert run('출력(누적합([1, 2, 3, 4]))') == "[1, 3, 6, 10]\n"
+    assert run('출력(누적합([]))') == "[]\n"          # 빈 목록
+    assert run('출력(누적합([5]))') == "[5]\n"          # 단일
+    assert run('출력(누적합([10, -3, 5]))') == "[10, 7, 12]\n"  # 음수
+
+
 def test_listdir():
     import tempfile, os, shutil
     d = os.path.join(tempfile.gettempdir(), "han_listdir_test")
