@@ -343,6 +343,19 @@ def test_zip():
     assert run(src) == "[11, 22, 33]\n"
 
 
+def test_random():
+    # 비결정 — 값이 아니라 범위/멤버십을 여러 번 단언
+    for _ in range(20):
+        v = float(run('출력(무작위())').strip())
+        assert 0.0 <= v < 1.0
+    for _ in range(30):
+        d = int(run('출력(무작위정수(1, 6))').strip())  # 주사위
+        assert 1 <= d <= 6
+    for _ in range(20):
+        c = run('출력(무작위선택(["가", "나", "다"]))').strip()
+        assert c in ("가", "나", "다")
+
+
 def test_json():
     # 파싱: JSON 문자열 → 값
     assert run('자료 = 제이슨파싱("{\\"이름\\": \\"한\\", \\"나이\\": 1}")\n출력(자료["이름"])') == "한\n"

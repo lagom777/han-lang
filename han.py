@@ -12,6 +12,7 @@
 import sys
 import os
 import math
+import random as _random
 import json as _json
 import urllib.request
 
@@ -867,6 +868,18 @@ def _묶기(interp, args):           # 묶기(목록1, 목록2) → [[a,b], ...]
     return [[a, b] for a, b in zip(args[0], args[1])]
 
 
+def _무작위(interp, args):         # 무작위() → 0.0 이상 1.0 미만 실수
+    return _random.random()
+
+
+def _무작위정수(interp, args):     # 무작위정수(시작, 끝) → 시작~끝 정수(양끝 포함)
+    return _random.randint(args[0], args[1])
+
+
+def _무작위선택(interp, args):     # 무작위선택(목록) → 목록에서 무작위 하나
+    return _random.choice(args[0])
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -913,6 +926,9 @@ BUILTINS = {
     '고유': _고유,
     '개수': _개수,
     '묶기': _묶기,
+    '무작위': _무작위,
+    '무작위정수': _무작위정수,
+    '무작위선택': _무작위선택,
 }
 
 
