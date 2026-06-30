@@ -195,11 +195,17 @@ class Parser:
         return ('if', cond, then, els)
 
     def for_stmt(self):
-        self.eat('KW', '반복'); var = self.eat('ID').val; self.eat('KW', '를')
+        self.eat('KW', '반복'); var = self.eat('ID').val
+        idx_var = None
+        if self.at('OP', ','):               # 반복 인덱스, 값 를 목록 에서 { }
+            self.eat('OP', ','); idx_var = var; var = self.eat('ID').val
+        self.eat('KW', '를')
         first = self.expr()
         if self.at('KW', '에서'):            # 반복 x 를 [목록] 에서 { }
             self.eat('KW', '에서')
-            return ('foreach', var, first, self.block())
+            return ('foreach', var, first, self.block(), idx_var)
+        if idx_var is not None:
+            raise HanError("범위 반복(부터..까지)에는 인덱스 변수를 쓸 수 없습니다 (순회 전용)")
         self.eat('KW', '부터'); end = self.expr(); self.eat('KW', '까지')   # 반복 i 를 a 부터 b 까지 { }
         return ('for', var, first, end, self.block())
 
@@ -468,8 +474,11 @@ class Interp:
                 items = coll
             else:
                 raise HanError("반복할 수 없는 값입니다 (목록·문자열·사전만)")
-            for it in items:
+            idx_var = node[4] if len(node) > 4 else None
+            for idx, it in enumerate(items):
                 loop = Env(env); loop.vars[node[1]] = it
+                if idx_var is not None:
+                    loop.vars[idx_var] = idx
                 try:
                     self.exec_block(node[3], loop)
                 except BreakSignal:

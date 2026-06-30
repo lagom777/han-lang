@@ -364,6 +364,19 @@ def test_merge():
     assert run('원본 = {"가": 1}\n병합(원본, {"나": 2})\n출력(길이(원본))') == "1\n"
 
 
+def test_foreach_index():
+    # 인덱스 + 값 동시 순회
+    assert run('반복 i, 값 를 ["가", "나", "다"] 에서 {\n출력(i + ":" + 값)\n}') == "0:가\n1:나\n2:다\n"
+    # 기존 단일 변수 순회는 그대로
+    assert run('합 = 0\n반복 x 를 [1, 2, 3] 에서 { 합 = 합 + x }\n출력(합)') == "6\n"
+    # 범위 반복에 인덱스 변수는 오류
+    try:
+        run('반복 i, j 를 1 부터 3 까지 { 출력(i) }')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert "인덱스" in str(e)
+
+
 def test_json():
     # 파싱: JSON 문자열 → 값
     assert run('자료 = 제이슨파싱("{\\"이름\\": \\"한\\", \\"나이\\": 1}")\n출력(자료["이름"])') == "한\n"
