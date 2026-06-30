@@ -432,6 +432,17 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_env():
+    import os
+    os.environ["HAN_TEST_VAR"] = "값123"
+    try:
+        assert run('출력(환경변수("HAN_TEST_VAR"))') == "값123\n"
+        assert run('출력(환경변수("HAN_없는_XYZ", "기본"))') == "기본\n"  # 기본값
+        assert run('출력(환경변수("HAN_없는_XYZ"))') == "없음\n"           # 기본 미지정
+    finally:
+        del os.environ["HAN_TEST_VAR"]
+
+
 def test_file_io():
     import tempfile, os
     p = os.path.join(tempfile.gettempdir(), "han_io_test.txt")

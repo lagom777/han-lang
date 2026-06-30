@@ -901,6 +901,11 @@ def _파일쓰기(interp, args):       # 파일쓰기(경로, 내용) → 내용
     return len(s)
 
 
+def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → 값, 없으면 기본값(미지정 시 없음)
+    name = 문자열화(args[0]) if args else ''
+    return os.environ.get(name, args[1] if len(args) > 1 else None)
+
+
 def _키들(interp, args):           # 사전의 키 목록
     return list(args[0].keys())
 
@@ -1146,6 +1151,7 @@ BUILTINS = {
     '입력': _입력,
     '파일읽기': _파일읽기,
     '파일쓰기': _파일쓰기,
+    '환경변수': _환경변수,
     '키들': _키들,
     '값들': _값들,
     '항목들': _항목들,
