@@ -925,6 +925,16 @@ def _발생(interp, args):           # 발생(메시지) → 오류 발생 (시�
     raise HanError(문자열화(args[0]) if args else '오류')
 
 
+def _왼쪽채우기(interp, args):     # 왼쪽채우기(값, 너비[, 채움]) → 왼쪽 채워 너비 맞춤(오른쪽 정렬)
+    s = 문자열화(args[0]); fill = 문자열화(args[2]) if len(args) > 2 else ' '
+    return s.rjust(int(args[1]), fill[0] if fill else ' ')
+
+
+def _오른쪽채우기(interp, args):   # 오른쪽채우기(값, 너비[, 채움]) → 오른쪽 채움(왼쪽 정렬)
+    s = 문자열화(args[0]); fill = 문자열화(args[2]) if len(args) > 2 else ' '
+    return s.ljust(int(args[1]), fill[0] if fill else ' ')
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -976,6 +986,8 @@ BUILTINS = {
     '무작위선택': _무작위선택,
     '병합': _병합,
     '발생': _발생,
+    '왼쪽채우기': _왼쪽채우기,
+    '오른쪽채우기': _오른쪽채우기,
 }
 
 
