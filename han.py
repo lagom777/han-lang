@@ -158,6 +158,12 @@ class Parser:
             return ('return', val)
         # 대입(변수/색인) vs 표현식
         node = self.expr()
+        if node[0] == 'var' and self.at('OP', ','):   # 구조 분해: 가, 나 = 목록
+            names = [node[1]]
+            while self.at('OP', ','):
+                self.eat('OP', ','); names.append(self.eat('ID').val)
+            self.eat('OP', '=')
+            return ('destructure', names, self.expr())
         if self.at('OP', '='):
             self.eat('OP', '=')
             rhs = self.expr()
@@ -447,6 +453,12 @@ class Interp:
             self._do_import(node[1])
         elif t == 'assign':
             env.set_existing_or_define(node[1], self.eval(node[2], env))
+        elif t == 'destructure':
+            vals = self.eval(node[2], env)
+            if not isinstance(vals, (list, str)) or len(vals) != len(node[1]):
+                raise HanError(f"구조 분해 오류: 값 {len(node[1])}개가 필요합니다 (목록/문자열만)")
+            for name, v in zip(node[1], vals):
+                env.set_existing_or_define(name, v)
         elif t == 'func':
             env.vars[node[1]] = Func(node[1], node[2], node[3], env)
         elif t == 'if':

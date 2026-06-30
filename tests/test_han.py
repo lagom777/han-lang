@@ -399,6 +399,19 @@ def test_default_params():
         assert "기본값" in str(e)
 
 
+def test_destructure():
+    assert run('가, 나 = [1, 2]\n출력(가 + 나)') == "3\n"
+    assert run('가, 나, 다 = [10, 20, 30]\n출력(다)') == "30\n"
+    # 항목(키-값 쌍) 분해
+    assert run('이름, 점수 = ["민지", 95]\n출력(이름 + ": " + 점수)') == "민지: 95\n"
+    # 개수 불일치 → 오류
+    try:
+        run('가, 나 = [1, 2, 3]')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert "구조 분해" in str(e)
+
+
 def test_json():
     # 파싱: JSON 문자열 → 값
     assert run('자료 = 제이슨파싱("{\\"이름\\": \\"한\\", \\"나이\\": 1}")\n출력(자료["이름"])') == "한\n"
