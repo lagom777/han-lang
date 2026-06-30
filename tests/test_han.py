@@ -432,6 +432,17 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_chunk():
+    assert run('출력(묶음([1,2,3,4,5], 2))') == "[[1, 2], [3, 4], [5]]\n"  # 마지막 짧음
+    assert run('출력(묶음([1,2,3,4], 2))') == "[[1, 2], [3, 4]]\n"
+    assert run('출력(묶음([], 3))') == "[]\n"
+    try:
+        run('묶음([1,2], 0)')  # 크기 0은 오류
+        assert False, "크기 0 오류 나야 함"
+    except Exception:
+        pass
+
+
 def test_frequency():
     assert run('출력(빈도(["가","나","가","다","가"]))') == "{가: 3, 나: 1, 다: 1}\n"
     assert run('출력(빈도([1,1,2,3,3,3]))') == "{1: 2, 2: 1, 3: 3}\n"

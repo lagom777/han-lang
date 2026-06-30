@@ -960,6 +960,14 @@ def _빈도(interp, args):           # 빈도(목록) → {원소: 개수} 사�
     return out
 
 
+def _묶음(interp, args):           # 묶음(목록, 크기) → 크기씩 자른 부분목록들 (마지막은 짧을 수 있음)
+    items = args[0]
+    n = int(args[1])
+    if n <= 0:
+        raise HanError('묶음: 크기는 1 이상이어야 합니다')
+    return [items[i:i + n] for i in range(0, len(items), n)]
+
+
 def _묶기(interp, args):           # 묶기(목록1, 목록2) → [[a,b], ...] (짧은 쪽 길이까지)
     return [[a, b] for a, b in zip(args[0], args[1])]
 
@@ -1076,6 +1084,7 @@ BUILTINS = {
     '고유': _고유,
     '개수': _개수,
     '빈도': _빈도,
+    '묶음': _묶음,
     '묶기': _묶기,
     '무작위': _무작위,
     '무작위정수': _무작위정수,
