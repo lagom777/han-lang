@@ -953,6 +953,13 @@ def _개수(interp, args):           # 개수(목록, 값) → 값이 목록에 
     return args[0].count(args[1])
 
 
+def _빈도(interp, args):           # 빈도(목록) → {원소: 개수} 사전 (첫 등장 순서)
+    out = {}
+    for x in args[0]:
+        out[x] = out.get(x, 0) + 1
+    return out
+
+
 def _묶기(interp, args):           # 묶기(목록1, 목록2) → [[a,b], ...] (짧은 쪽 길이까지)
     return [[a, b] for a, b in zip(args[0], args[1])]
 
@@ -1068,6 +1075,7 @@ BUILTINS = {
     '모두': _모두,
     '고유': _고유,
     '개수': _개수,
+    '빈도': _빈도,
     '묶기': _묶기,
     '무작위': _무작위,
     '무작위정수': _무작위정수,

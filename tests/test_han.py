@@ -432,6 +432,12 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_frequency():
+    assert run('출력(빈도(["가","나","가","다","가"]))') == "{가: 3, 나: 1, 다: 1}\n"
+    assert run('출력(빈도([1,1,2,3,3,3]))') == "{1: 2, 2: 1, 3: 3}\n"
+    assert run('출력(빈도([]))') == "{}\n"
+
+
 def test_string_find():
     assert run('출력(위치("안녕하세요", "하세"))') == "2\n"   # 0부터
     assert run('출력(위치("안녕", "없음"))') == "-1\n"        # 없으면 -1
