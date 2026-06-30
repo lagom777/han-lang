@@ -1,0 +1,10 @@
+# AI 모델 선택 — 이후 질문/체계질문에 쓸 LLM 지정 (OpenRouter 모델명)
+모델("anthropic/claude-3.5-sonnet")
+출력("현재 모델: " + 모델())
+
+# 질문 (OPENROUTER_API_KEY 없으면 안내 stub)
+답 = 질문("한국의 수도는 어디야? 한 단어로.")
+출력("답: " + 답)
+
+# 한 번만 다른 모델로 (전역 설정은 그대로)
+출력(질문("1+1은?", "openai/gpt-4o-mini"))

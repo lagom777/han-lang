@@ -432,6 +432,13 @@ def test_raise():
         assert "치명적" in str(e)
 
 
+def test_model_select():
+    # 기본 모델 조회
+    assert "gpt" in run('출력(모델())')
+    # 설정 후 조회(같은 프로그램 내 유지)
+    assert run('모델("anthropic/claude-3.5")\n출력(모델())') == "anthropic/claude-3.5\n"
+
+
 def test_repl_command():
     assert repl_command("출력(1)") is None          # 일반 코드는 명령 아님
     assert repl_command(":종료") == ("quit", None)

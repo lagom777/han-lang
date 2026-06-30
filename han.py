@@ -762,16 +762,25 @@ def _ai_call(messages, model):     # 공통 OpenRouter 호출 (질문·체계질
         raise HanError('AI 호출 실패: ' + str(e))
 
 
+DEFAULT_AI_MODEL = 'openai/gpt-4o-mini'
+
+
+def _모델(interp, args):           # 모델([이름]) → 이름 주면 이후 질문 기본 모델 설정, 항상 현재 모델 반환
+    if args:
+        interp.ai_model = 문자열화(args[0])
+    return getattr(interp, 'ai_model', DEFAULT_AI_MODEL)
+
+
 def _질문(interp, args):           # AI에게 묻기 — 질문(프롬프트[, 모델]). OpenRouter 경유.
     prompt = 문자열화(args[0]) if args else ''
-    model = args[1] if len(args) > 1 else 'openai/gpt-4o-mini'
+    model = args[1] if len(args) > 1 else getattr(interp, 'ai_model', DEFAULT_AI_MODEL)
     return _ai_call([{'role': 'user', 'content': prompt}], model)
 
 
 def _체계질문(interp, args):       # 체계질문(시스템, 사용자[, 모델]) — 시스템 프롬프트로 AI 행동 제어
     system = 문자열화(args[0]) if args else ''
     user = 문자열화(args[1]) if len(args) > 1 else ''
-    model = args[2] if len(args) > 2 else 'openai/gpt-4o-mini'
+    model = args[2] if len(args) > 2 else getattr(interp, 'ai_model', DEFAULT_AI_MODEL)
     return _ai_call([
         {'role': 'system', 'content': system},
         {'role': 'user', 'content': user},
@@ -1082,6 +1091,7 @@ BUILTINS = {
     '위치': _위치,
     '합치기': _합치기,
     '거꾸로': _거꾸로,
+    '모델': _모델,
     '질문': _질문,
     '체계질문': _체계질문,
     '대문자': _대문자,
