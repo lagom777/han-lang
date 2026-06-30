@@ -420,6 +420,18 @@ def test_range_step():
     assert run('출력(범위(2, 5))') == "[2, 3, 4]\n"
 
 
+def test_raise():
+    # 발생 → 시도/잡기로 잡힘
+    src = '시도 {\n발생("잘못된 입력")\n} 잡기(오류) {\n출력("잡음: " + 오류)\n}'
+    assert run(src) == "잡음: 잘못된 입력\n"
+    # 안 잡으면 전파(메시지+행 정보)
+    try:
+        run('출력(1)\n발생("치명적")')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert "치명적" in str(e)
+
+
 def test_json():
     # 파싱: JSON 문자열 → 값
     assert run('자료 = 제이슨파싱("{\\"이름\\": \\"한\\", \\"나이\\": 1}")\n출력(자료["이름"])') == "한\n"

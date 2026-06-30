@@ -921,6 +921,10 @@ def _병합(interp, args):           # 병합(사전1, 사전2, ...) → 합친 
     return out
 
 
+def _발생(interp, args):           # 발생(메시지) → 오류 발생 (시도/잡기로 잡힘)
+    raise HanError(문자열화(args[0]) if args else '오류')
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -971,6 +975,7 @@ BUILTINS = {
     '무작위정수': _무작위정수,
     '무작위선택': _무작위선택,
     '병합': _병합,
+    '발생': _발생,
 }
 
 
