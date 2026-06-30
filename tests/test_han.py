@@ -449,6 +449,18 @@ def test_now():
     assert run('시작 = 지금()\n끝 = 지금()\n출력(끝 >= 시작)') == "참\n"  # 경과 측정
 
 
+def test_listdir():
+    import tempfile, os, shutil
+    d = os.path.join(tempfile.gettempdir(), "han_listdir_test")
+    if os.path.exists(d):
+        shutil.rmtree(d)
+    os.makedirs(d)
+    open(os.path.join(d, "b.txt"), "w").close()
+    open(os.path.join(d, "a.txt"), "w").close()
+    assert run(f'출력(파일목록("{d}"))') == "[a.txt, b.txt]\n"  # 정렬됨
+    shutil.rmtree(d)
+
+
 def test_file_exists():
     import tempfile, os
     p = os.path.join(tempfile.gettempdir(), "han_exists_test.txt")

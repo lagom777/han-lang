@@ -912,6 +912,10 @@ def _파일존재(interp, args):       # 파일존재(경로) → 참/거짓 (�
     return os.path.exists(문자열화(args[0]))
 
 
+def _파일목록(interp, args):       # 파일목록(경로) → 디렉터리 안 항목 이름 목록(정렬). 폴더 일괄 처리용
+    return sorted(os.listdir(문자열화(args[0])))
+
+
 def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → 값, 없으면 기본값(미지정 시 없음)
     name = 문자열화(args[0]) if args else ''
     return os.environ.get(name, args[1] if len(args) > 1 else None)
@@ -1169,6 +1173,7 @@ BUILTINS = {
     '파일쓰기': _파일쓰기,
     '이어쓰기': _이어쓰기,
     '파일존재': _파일존재,
+    '파일목록': _파일목록,
     '환경변수': _환경변수,
     '지금': _지금,
     '키들': _키들,
