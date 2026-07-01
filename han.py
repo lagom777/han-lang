@@ -227,7 +227,11 @@ class Parser:
         if idx_var is not None:
             raise HanError("범위 반복(부터..까지)에는 인덱스 변수를 쓸 수 없습니다 (순회 전용)")
         self.eat('KW', '부터'); end = self.expr(); self.eat('KW', '까지')   # 반복 i 를 a 부터 b 까지 { }
-        return ('for', var, first, end, self.block())
+        step = None
+        if not self.at('OP', '{'):          # 까지 뒤가 블록이 아니면 스텝: <식> 씩
+            step = self.expr()
+            self.eat('ID', '씩')            # '씩' 필수 — 반복 i 를 a 부터 b 까지 N 씩 { }
+        return ('for', var, first, end, self.block(), step)
 
     # 표현식 (우선순위)
     def expr(self):
@@ -487,8 +491,13 @@ class Interp:
                     continue
         elif t == 'for':
             a = self.eval(node[2], env); b = self.eval(node[3], env)
+            step = self.eval(node[5], env) if node[5] is not None else 1
+            if not isinstance(step, (int, float)):
+                raise HanError("범위 반복 스텝은 숫자여야 합니다")
+            if step == 0:
+                raise HanError("범위 반복 스텝은 0일 수 없습니다")
             i = a
-            while i <= b:                       # 부터..까지 = 양끝 포함
+            while (i <= b) if step > 0 else (i >= b):   # 부터..까지 양끝 포함, 스텝 방향 따라
                 loop = Env(env); loop.vars[node[1]] = i
                 try:
                     self.exec_block(node[4], loop)
@@ -496,7 +505,7 @@ class Interp:
                     break
                 except ContinueSignal:
                     pass
-                i += 1
+                i += step
         elif t == 'foreach':
             coll = self.eval(node[2], env)
             if isinstance(coll, dict):

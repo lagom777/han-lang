@@ -30,6 +30,25 @@ def test_for_inclusive():
     assert run('반복 i 를 1 부터 3 까지 { 출력(i) }') == "1\n2\n3\n"
 
 
+def test_for_step():
+    # 'N 씩' 스텝으로 건너뛰며 반복(양끝 포함)
+    assert run('반복 i 를 0 부터 10 까지 2 씩 { 출력(i) }') == "0\n2\n4\n6\n8\n10\n"
+    # 상한을 정확히 안 밟아도 초과 직전까지
+    assert run('반복 i 를 1 부터 6 까지 2 씩 { 출력(i) }') == "1\n3\n5\n"
+    # 음수 스텝 → 거꾸로 카운트다운
+    assert run('반복 i 를 3 부터 1 까지 -1 씩 { 출력(i) }') == "3\n2\n1\n"
+    # 스텝 식(변수)도 허용
+    assert run('n = 3\n반복 i 를 0 부터 9 까지 n 씩 { 출력(i) }') == "0\n3\n6\n9\n"
+    # 스텝 0은 친절한 오류(무한 루프 방지)
+    try:
+        run('반복 i 를 0 부터 5 까지 0 씩 { 출력(i) }')
+        assert False, "스텝 0 오류가 나야 함"
+    except Exception as e:
+        assert '스텝' in str(e)
+    # 스텝 없는 기존 문법은 그대로(1씩)
+    assert run('반복 i 를 1 부터 3 까지 { 출력(i) }') == "1\n2\n3\n"
+
+
 def test_if_elif_else():
     src = '만약 1 > 2 { 출력("a") } 아니면 만약 2 > 1 { 출력("b") } 아니면 { 출력("c") }'
     assert run(src) == "b\n"
