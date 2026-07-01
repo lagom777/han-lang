@@ -1007,6 +1007,13 @@ def _거르기(interp, args):         # 거르기(목록, 함수) → 함수가 
     return [x for x in args[0] if 참인가(interp.apply_func(args[1], [x]))]
 
 
+def _분할(interp, args):           # 분할(목록, 함수) → [함수 참인 것들, 거짓인 것들] (partition)
+    yes, no = [], []
+    for x in args[0]:
+        (yes if 참인가(interp.apply_func(args[1], [x])) else no).append(x)
+    return [yes, no]
+
+
 def _접기(interp, args):           # 접기(목록, 초기값, 함수(누적,원소)) → 하나로 누적 (reduce)
     acc = args[1]
     for x in args[0]:
@@ -1241,6 +1248,7 @@ BUILTINS = {
     '변환': _변환,
     '생성': _생성,
     '거르기': _거르기,
+    '분할': _분할,
     '접기': _접기,
     '서식': _서식,
     '정렬기준': _정렬기준,
