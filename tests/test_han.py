@@ -175,6 +175,15 @@ def test_ai_요약_stub_without_key():
     assert 'AI 키 없음' in run('출력(요약("긴 글 요약 테스트"))')
 
 
+def test_ai_번역_stub_without_key():
+    # 번역: 텍스트를 사용자 프롬프트로 LLM 호출(키 없으면 stub, 입력 텍스트 반영)
+    os.environ.pop('OPENROUTER_API_KEY', None)
+    out = run('출력(번역("안녕하세요", "영어"))')
+    assert 'AI 키 없음' in out and '안녕하세요' in out  # 텍스트가 프롬프트에 반영됨
+    # 목표 언어 인자 없이도 동작(기본=영어)
+    assert 'AI 키 없음' in run('출력(번역("반갑습니다"))')
+
+
 def test_runtime_error_has_line():
     # 런타임 오류에 행 번호가 붙는다(2번째 줄에서 미정의 변수)
     try:

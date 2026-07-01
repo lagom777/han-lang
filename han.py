@@ -867,6 +867,17 @@ def _요약(interp, args):           # 요약(텍스트[, 문장수][, 모델]) 
     ], model)
 
 
+def _번역(interp, args):           # 번역(텍스트, 목표언어[, 모델]) → LLM으로 번역. 대표 AI 작업.
+    text = 문자열화(args[0]) if args else ''
+    lang = 문자열화(args[1]) if len(args) > 1 else '영어'
+    model = args[2] if len(args) > 2 else getattr(interp, 'ai_model', DEFAULT_AI_MODEL)
+    system = '다음 텍스트를 ' + lang + '(으)로 자연스럽게 번역하세요. 번역문만 출력하세요.'
+    return _ai_call([
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': text},
+    ], model)
+
+
 def _대문자(interp, args):
     return args[0].upper()
 
@@ -1301,6 +1312,7 @@ BUILTINS = {
     '체계질문': _체계질문,
     '분류': _분류,
     '요약': _요약,
+    '번역': _번역,
     '대문자': _대문자,
     '소문자': _소문자,
     '다듬기': _다듬기,
