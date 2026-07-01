@@ -1048,6 +1048,11 @@ def _정렬기준(interp, args):       # 정렬기준(목록, 키함수) → 키
     return sorted(args[0], key=lambda x: interp.apply_func(args[1], [x]))
 
 
+def _상위기준(interp, args):       # 상위기준(목록, 개수, 키함수) → 키함수 값 큰 순 상위 n개(원소 유지). 객체 순위표
+    n = int(args[1]) if len(args) > 1 else 1
+    return sorted(args[0], key=lambda x: interp.apply_func(args[2], [x]), reverse=True)[:max(0, n)]
+
+
 def _최대기준(interp, args):       # 최대기준(목록, 키함수) → 키함수 값이 최대인 원소 (argmax)
     items = args[0]
     if not items:
@@ -1267,6 +1272,7 @@ BUILTINS = {
     '접기': _접기,
     '서식': _서식,
     '정렬기준': _정렬기준,
+    '상위기준': _상위기준,
     '최대기준': _최대기준,
     '최소기준': _최소기준,
     '찾기': _찾기,
