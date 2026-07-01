@@ -740,6 +740,11 @@ def _정렬(interp, args):           # 정렬된 새 목록
     return sorted(args[0])
 
 
+def _상위(interp, args):           # 상위(목록, 개수) → 큰 순 상위 n개(내림차순 정렬 후 잘라냄). 순위표용
+    n = int(args[1]) if len(args) > 1 else 1
+    return sorted(args[0], reverse=True)[:max(0, n)]
+
+
 def _최대(interp, args):
     return max(args[0])
 
@@ -1210,6 +1215,7 @@ BUILTINS = {
     '최빈값': _최빈값,
     '정규화': _정규화,
     '정렬': _정렬,
+    '상위': _상위,
     '최대': _최대,
     '최소': _최소,
     '범위': _범위,

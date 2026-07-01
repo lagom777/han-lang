@@ -89,6 +89,9 @@ def test_dict_missing_key_errors():
 def test_builtins_collection():
     assert run('출력(합([1, 2, 3, 4]))') == "10\n"
     assert run('출력(정렬([3, 1, 2]))') == "[1, 2, 3]\n"
+    assert run('출력(상위([3, 1, 4, 1, 5, 9, 2], 3))') == "[9, 5, 4]\n"  # top-N
+    assert run('출력(상위([1, 2], 5))') == "[2, 1]\n"                     # n > 길이
+    assert run('출력(상위([5, 3, 8], 0))') == "[]\n"                       # n=0
     assert run('출력(최대([5, 9, 2]))') == "9\n"
     assert run('출력(최소([5, 9, 2]))') == "2\n"
     assert run('출력(범위(5))') == "[0, 1, 2, 3, 4]\n"
