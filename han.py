@@ -901,6 +901,24 @@ def _끝(interp, args):
     return args[0].endswith(args[1])
 
 
+def _숫자인가(interp, args):        # 숫자인가(값) → 숫자로 볼 수 있으면 참(입력 검증용). 숫자 자체 or 숫자 문자열
+    v = args[0] if args else None
+    if isinstance(v, bool):
+        return False                # 참/거짓은 숫자가 아님
+    if isinstance(v, (int, float)):
+        return True
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return False
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
+    return False
+
+
 def _타입(interp, args):           # 값의 타입 이름
     v = args[0]
     if v is True or v is False:
@@ -1291,6 +1309,7 @@ BUILTINS = {
     '포함': _포함,
     '시작': _시작,
     '끝': _끝,
+    '숫자인가': _숫자인가,
     '타입': _타입,
     '절댓값': _절댓값,
     '반올림': _반올림,

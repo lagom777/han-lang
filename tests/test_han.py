@@ -270,6 +270,18 @@ def test_string_methods():
     assert run('출력(끝("프로그램", "램"))') == "참\n"
 
 
+def test_숫자인가():
+    # 숫자 문자열/숫자는 참, 아니면 거짓(입력 검증용)
+    assert run('출력(숫자인가("123"))') == "참\n"
+    assert run('출력(숫자인가("3.14"))') == "참\n"
+    assert run('출력(숫자인가("  -5 "))') == "참\n"      # 부호·공백 허용
+    assert run('출력(숫자인가(42))') == "참\n"           # 숫자 자체
+    assert run('출력(숫자인가("abc"))') == "거짓\n"
+    assert run('출력(숫자인가("12개"))') == "거짓\n"      # 숫자+비숫자 혼합
+    assert run('출력(숫자인가(""))') == "거짓\n"
+    assert run('출력(숫자인가(참))') == "거짓\n"          # 불리언은 숫자 아님
+
+
 def test_type_builtin():
     assert run('출력(타입(3))') == "정수\n"
     assert run('출력(타입(3.5))') == "실수\n"
