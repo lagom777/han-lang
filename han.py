@@ -746,8 +746,8 @@ def _정규화(interp, args):         # 정규화(목록) → 최소~최대를 0
     return [(x - lo) / (hi - lo) for x in xs]
 
 
-def _정렬(interp, args):           # 정렬된 새 목록
-    return sorted(args[0])
+def _정렬(interp, args):           # 정렬(목록[, 내림차순]) → 정렬된 새 목록(기본 오름차순, 2번째 인자 참이면 내림차순)
+    return sorted(args[0], reverse=참인가(args[1]) if len(args) > 1 else False)
 
 
 def _상위(interp, args):           # 상위(목록, 개수) → 큰 순 상위 n개(내림차순 정렬 후 잘라냄). 순위표용
@@ -1122,8 +1122,8 @@ def _서식(interp, args):           # 서식(틀, ...값) — 틀의 {} 를 값
     return result
 
 
-def _정렬기준(interp, args):       # 정렬기준(목록, 키함수) → 키함수(원소) 기준 오름차순 새 목록
-    return sorted(args[0], key=lambda x: interp.apply_func(args[1], [x]))
+def _정렬기준(interp, args):       # 정렬기준(목록, 키함수[, 내림차순]) → 키함수 기준 정렬(기본 오름차순, 3번째 참이면 내림차순)
+    return sorted(args[0], key=lambda x: interp.apply_func(args[1], [x]), reverse=참인가(args[2]) if len(args) > 2 else False)
 
 
 def _상위기준(interp, args):       # 상위기준(목록, 개수, 키함수) → 키함수 값 큰 순 상위 n개(원소 유지). 객체 순위표
