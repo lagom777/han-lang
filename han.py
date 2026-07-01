@@ -833,6 +833,19 @@ def _체계질문(interp, args):       # 체계질문(시스템, 사용자[, 모
     ], model)
 
 
+def _분류(interp, args):           # 분류(텍스트, 보기목록[, 모델]) → 보기 중 하나로 분류(LLM). 감정·의도·카테고리
+    text = 문자열화(args[0]) if args else ''
+    choices = args[1] if len(args) > 1 else []
+    model = args[2] if len(args) > 2 else getattr(interp, 'ai_model', DEFAULT_AI_MODEL)
+    labels = ', '.join(문자열화(c) for c in choices)
+    system = '다음 텍스트를 주어진 보기 중 정확히 하나로 분류하고, 그 보기 라벨만 출력하세요.'
+    user = '텍스트: ' + text + '\n보기: ' + labels
+    return _ai_call([
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user},
+    ], model)
+
+
 def _대문자(interp, args):
     return args[0].upper()
 
@@ -1247,6 +1260,7 @@ BUILTINS = {
     '모델': _모델,
     '질문': _질문,
     '체계질문': _체계질문,
+    '분류': _분류,
     '대문자': _대문자,
     '소문자': _소문자,
     '다듬기': _다듬기,

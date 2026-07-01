@@ -140,6 +140,13 @@ def test_ai_체계질문_stub_without_key():
     assert 'AI 키 없음' in out and '바다를' in out
 
 
+def test_ai_분류_stub_without_key():
+    # 분류: 텍스트+보기를 사용자 프롬프트로 구성해 LLM 호출(키 없으면 stub, 보기 라벨 포함)
+    os.environ.pop('OPENROUTER_API_KEY', None)
+    out = run('출력(분류("이 영화 최고!", ["긍정", "부정"]))')
+    assert 'AI 키 없음' in out and '긍정' in out  # 보기가 프롬프트에 반영됨
+
+
 def test_runtime_error_has_line():
     # 런타임 오류에 행 번호가 붙는다(2번째 줄에서 미정의 변수)
     try:
