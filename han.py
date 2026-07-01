@@ -788,6 +788,10 @@ def _나누기(interp, args):         # 문자열 나누기 → 목록
     return args[0].split(args[1]) if len(args) > 1 else args[0].split()
 
 
+def _줄나누기(interp, args):       # 줄나누기(문자열) → 줄 단위 목록(\n·\r\n 처리, 끝 개행 무시). 파일·여러 줄 처리용
+    return 문자열화(args[0] if args else '').splitlines()
+
+
 def _위치(interp, args):           # 위치(문자열, 부분) → 부분의 첫 위치(0부터), 없으면 -1
     return 문자열화(args[0]).find(문자열화(args[1]))
 
@@ -1325,6 +1329,7 @@ BUILTINS = {
     '범위': _범위,
     '간격': _간격,
     '나누기': _나누기,
+    '줄나누기': _줄나누기,
     '위치': _위치,
     '합치기': _합치기,
     '거꾸로': _거꾸로,
