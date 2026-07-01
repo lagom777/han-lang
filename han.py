@@ -716,6 +716,16 @@ def _표준편차(interp, args):       # 표준편차(목록) → 모표준편�
     return math.sqrt(var)
 
 
+def _최빈값(interp, args):         # 최빈값(목록) → 가장 자주 나온 값(동률이면 먼저 등장한 것). 빈 목록 오류
+    items = args[0]
+    if not items:
+        raise HanError('최빈값: 빈 목록')
+    counts = {}
+    for x in items:
+        counts[x] = counts.get(x, 0) + 1
+    return max(counts, key=lambda k: counts[k])  # 동률 시 삽입(첫 등장) 순 우선
+
+
 def _정렬(interp, args):           # 정렬된 새 목록
     return sorted(args[0])
 
@@ -1158,6 +1168,7 @@ BUILTINS = {
     '평균': _평균,
     '중앙값': _중앙값,
     '표준편차': _표준편차,
+    '최빈값': _최빈값,
     '정렬': _정렬,
     '최대': _최대,
     '최소': _최소,
