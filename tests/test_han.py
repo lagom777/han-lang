@@ -201,6 +201,27 @@ def test_error_shows_source_line():
         assert '2행' in s and '출력(1 +)' in s
 
 
+def test_error_shows_column_caret():
+    # 열 정보가 있는 오류(렉서/파서)엔 그 자리를 가리키는 ^ 캐럿이 붙는다
+    try:
+        run('가 = 1\n나 = @')  # 2행 5열의 '@' — 렉서 오류
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        s = str(e)
+        assert '2행' in s and '5열' in s
+        assert '나 = @' in s
+        caret = s.splitlines()[-1]
+        assert caret.strip() == '^'   # 마지막 줄은 캐럿
+        # 한글 폭 보정: prefix "  2 | "(6) + "나 = "(2+1+1+1=5) = 11칸 뒤에 ^
+        assert caret == ' ' * 11 + '^'
+    # 열 정보 없는 런타임 오류엔 캐럿을 붙이지 않는다(소스 줄만)
+    try:
+        run('목록 = [1]\n출력(목록[9])')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        assert '^' not in str(e)
+
+
 def test_module_import():
     # 다른 .han 파일의 함수/변수를 가져와 사용
     out = run('가져오기 "examples/lib.han"\n출력(곱하기(6, 7))\n출력(제곱(5))')

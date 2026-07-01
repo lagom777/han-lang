@@ -15,6 +15,7 @@ import math
 import random as _random
 import json as _json
 import urllib.request
+import unicodedata
 
 
 class HanError(Exception):
@@ -1332,8 +1333,14 @@ BUILTINS = {
 
 
 # ============================================================ 진입점
+def _표시폭(s):
+    """터미널 표시 폭 — 한글 등 East-Asian Wide/Fullwidth는 2칸. 캐럿 정렬용."""
+    return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
+
+
 def _소스줄_붙이기(msg, src):
-    """오류 메시지 앞의 [N행 ...] 에서 행 번호를 뽑아 그 소스 줄을 아래에 덧붙인다.
+    """오류 메시지 앞의 [N행 ...] / [N행 M열 ...] 에서 위치를 뽑아 그 소스 줄을
+    아래에 덧붙인다. 열 정보가 있으면 그 자리를 가리키는 ^ 캐럿도 추가(한글 폭 보정).
     행 정보가 없거나(범위 밖·빈 줄) 이미 붙어 있으면 원문 그대로."""
     if not msg.startswith('[') or '\n' in msg:
         return msg
@@ -1343,13 +1350,27 @@ def _소스줄_붙이기(msg, src):
     if j == 1 or not msg[j:].startswith('행'):
         return msg
     n = int(msg[1:j])
+    # 선택적 열 번호 파싱: "행 M열"
+    col = None
+    k = j + len('행')
+    while k < len(msg) and msg[k] == ' ':
+        k += 1
+    d = k
+    while d < len(msg) and msg[d].isdigit():
+        d += 1
+    if d > k and msg[d:].startswith('열'):
+        col = int(msg[k:d])
     lines = src.split('\n')
     if not (1 <= n <= len(lines)):
         return msg
-    코드 = lines[n - 1].strip()
-    if not 코드:
+    코드 = lines[n - 1].rstrip()          # 앞 들여쓰기는 유지(캐럿 정렬)
+    if not 코드.strip():
         return msg
-    return f"{msg}\n  {n} | {코드}"
+    prefix = f"  {n} | "
+    out = f"{msg}\n{prefix}{코드}"
+    if col is not None and 1 <= col <= len(코드) + 1:
+        out += "\n" + " " * (len(prefix) + _표시폭(코드[:col - 1])) + "^"
+    return out
 
 
 def 실행소스(src, out=None, base_dir='.'):
