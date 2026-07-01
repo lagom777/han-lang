@@ -1486,7 +1486,13 @@ def repl_command(line, interp=None):
     if cmd in (':종료', ':끝'):
         return ('quit', None)
     if cmd == ':도움':
-        return ('print', "명령: :도움(도움말) :변수(정의된 변수) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
+        return ('print', "명령: :도움(도움말) :변수(정의된 변수) :비우기(변수 초기화) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
+    if cmd in (':비우기', ':초기화'):
+        if interp is None:
+            return ('print', "(초기화할 수 없어요)")
+        n = len(interp.g.vars)
+        interp.g.vars.clear()          # 사용자 정의 변수·함수만 삭제(내장함수는 BUILTINS라 유지)
+        return ('print', f"변수 {n}개를 지웠어요.")
     if cmd in (':변수', ':환경'):
         if interp is None:
             return ('print', "(변수 정보를 볼 수 없어요)")

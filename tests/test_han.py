@@ -730,7 +730,18 @@ def test_repl_command_변수():
     assert repl_command(":변수")[0] == "print"
 
 
-def test_thousands():
+def test_repl_command_비우기():
+    # :비우기 는 세션 변수를 지운다(내장함수는 유지)
+    it = Interp()
+    repl_eval(it, "가 = 1")
+    repl_eval(it, "나 = 2")
+    action, text = repl_command(":비우기", it)
+    assert action == "print" and "2개" in text        # 지운 개수 안내
+    assert repl_command(":변수", it) == ("print", "정의된 변수가 없어요")
+    # 초기화 후에도 내장함수는 정상 동작
+    assert repl_eval(it, "합([1, 2, 3])") == "6"
+    # :도움에 :비우기 안내
+    assert ":비우기" in repl_command(":도움")[1]
     assert run('출력(천단위(1234567))') == "1,234,567\n"
     assert run('출력(천단위(1000))') == "1,000\n"
     assert run('출력(천단위(999))') == "999\n"
