@@ -649,6 +649,10 @@ class Interp:
 
     def call(self, node, env):
         callee = node[1]
+        # 고르기(조건, 참값, 거짓값) — 지연 평가 특수형(선택된 가지만 평가). 삼항 조건식 대용.
+        if callee[0] == 'var' and callee[1] == '고르기' and len(node[2]) == 3:
+            cond = self.eval(node[2][0], env)
+            return self.eval(node[2][1] if 참인가(cond) else node[2][2], env)
         args = [self.eval(a, env) for a in node[2]]
         # 내장 함수
         if callee[0] == 'var' and callee[1] in BUILTINS:
