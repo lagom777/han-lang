@@ -1014,6 +1014,14 @@ def _분할(interp, args):           # 분할(목록, 함수) → [함수 참인
     return [yes, no]
 
 
+def _그룹화(interp, args):         # 그룹화(목록, 키함수) → {키: [원소들]} (groupby, 첫 등장 순)
+    out = {}
+    for x in args[0]:
+        k = interp.apply_func(args[1], [x])
+        out.setdefault(k, []).append(x)
+    return out
+
+
 def _접기(interp, args):           # 접기(목록, 초기값, 함수(누적,원소)) → 하나로 누적 (reduce)
     acc = args[1]
     for x in args[0]:
@@ -1249,6 +1257,7 @@ BUILTINS = {
     '생성': _생성,
     '거르기': _거르기,
     '분할': _분할,
+    '그룹화': _그룹화,
     '접기': _접기,
     '서식': _서식,
     '정렬기준': _정렬기준,
