@@ -856,6 +856,17 @@ def _분류(interp, args):           # 분류(텍스트, 보기목록[, 모델])
     ], model)
 
 
+def _요약(interp, args):           # 요약(텍스트[, 문장수][, 모델]) → LLM으로 N문장 요약. 대표 AI 작업.
+    text = 문자열화(args[0]) if args else ''
+    n = args[1] if len(args) > 1 else 3
+    model = args[2] if len(args) > 2 else getattr(interp, 'ai_model', DEFAULT_AI_MODEL)
+    system = '다음 텍스트를 핵심만 담아 ' + 문자열화(n) + '문장 이내로 간결히 요약하세요. 요약문만 출력하세요.'
+    return _ai_call([
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': text},
+    ], model)
+
+
 def _대문자(interp, args):
     return args[0].upper()
 
@@ -1271,6 +1282,7 @@ BUILTINS = {
     '질문': _질문,
     '체계질문': _체계질문,
     '분류': _분류,
+    '요약': _요약,
     '대문자': _대문자,
     '소문자': _소문자,
     '다듬기': _다듬기,
