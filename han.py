@@ -726,6 +726,16 @@ def _최빈값(interp, args):         # 최빈값(목록) → 가장 자주 나�
     return max(counts, key=lambda k: counts[k])  # 동률 시 삽입(첫 등장) 순 우선
 
 
+def _정규화(interp, args):         # 정규화(목록) → 최소~최대를 0~1로 선형 변환(min-max). 모두 같으면 0들, 빈 목록 []
+    xs = args[0]
+    if not xs:
+        return []
+    lo, hi = min(xs), max(xs)
+    if hi == lo:
+        return [0 for _ in xs]
+    return [(x - lo) / (hi - lo) for x in xs]
+
+
 def _정렬(interp, args):           # 정렬된 새 목록
     return sorted(args[0])
 
@@ -1179,6 +1189,7 @@ BUILTINS = {
     '중앙값': _중앙값,
     '표준편차': _표준편차,
     '최빈값': _최빈값,
+    '정규화': _정규화,
     '정렬': _정렬,
     '최대': _최대,
     '최소': _최소,
