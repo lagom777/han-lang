@@ -946,6 +946,11 @@ def _숫자인가(interp, args):        # 숫자인가(값) → 숫자로 볼 �
     return False
 
 
+def _글자인가(interp, args):        # 글자인가(문자열) → 모두 글자면 참(숫자·공백·기호 섞이면 거짓, 빈 문자열 거짓). 한글 포함
+    s = args[0] if args else None
+    return isinstance(s, str) and len(s) > 0 and s.isalpha()
+
+
 def _타입(interp, args):           # 값의 타입 이름
     v = args[0]
     if v is True or v is False:
@@ -1339,6 +1344,7 @@ BUILTINS = {
     '시작': _시작,
     '끝': _끝,
     '숫자인가': _숫자인가,
+    '글자인가': _글자인가,
     '타입': _타입,
     '절댓값': _절댓값,
     '반올림': _반올림,
