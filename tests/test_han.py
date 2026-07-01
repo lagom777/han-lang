@@ -176,6 +176,31 @@ def test_lex_error_has_column():
         assert '2행' in s and '5열' in s
 
 
+def test_error_shows_source_line():
+    # 런타임 오류에 문제의 소스 줄이 함께 표시된다(Python 트레이스백처럼)
+    try:
+        run('출력(1)\n출력(없는변수)\n출력(3)')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        s = str(e)
+        assert '2행' in s
+        assert '출력(없는변수)' in s   # 문제의 소스 줄이 붙는다
+    # 색인 오류도 소스 줄을 보여준다
+    try:
+        run('목록 = [1, 2]\n출력(목록[9])')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        s = str(e)
+        assert '2행' in s and '목록[9]' in s
+    # 구문 오류(파서)에도 소스 줄이 붙는다
+    try:
+        run('출력(1)\n출력(1 +)')
+        assert False, "오류가 나야 함"
+    except Exception as e:
+        s = str(e)
+        assert '2행' in s and '출력(1 +)' in s
+
+
 def test_module_import():
     # 다른 .han 파일의 함수/변수를 가져와 사용
     out = run('가져오기 "examples/lib.han"\n출력(곱하기(6, 7))\n출력(제곱(5))')

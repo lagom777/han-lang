@@ -1332,10 +1332,33 @@ BUILTINS = {
 
 
 # ============================================================ 진입점
+def _소스줄_붙이기(msg, src):
+    """오류 메시지 앞의 [N행 ...] 에서 행 번호를 뽑아 그 소스 줄을 아래에 덧붙인다.
+    행 정보가 없거나(범위 밖·빈 줄) 이미 붙어 있으면 원문 그대로."""
+    if not msg.startswith('[') or '\n' in msg:
+        return msg
+    j = 1
+    while j < len(msg) and msg[j].isdigit():
+        j += 1
+    if j == 1 or not msg[j:].startswith('행'):
+        return msg
+    n = int(msg[1:j])
+    lines = src.split('\n')
+    if not (1 <= n <= len(lines)):
+        return msg
+    코드 = lines[n - 1].strip()
+    if not 코드:
+        return msg
+    return f"{msg}\n  {n} | {코드}"
+
+
 def 실행소스(src, out=None, base_dir='.'):
     interp = Interp(out=out)
     interp.base_dir = base_dir
-    interp.run(Parser(lex(src)).parse())
+    try:
+        interp.run(Parser(lex(src)).parse())
+    except HanError as e:                       # 렉서·파서·런타임 오류에 문제의 소스 줄 표시
+        raise HanError(_소스줄_붙이기(str(e), src)) from None
     return interp
 
 
