@@ -759,8 +759,11 @@ def _합치기(interp, args):         # 목록 → 문자열 (구분자)
     return sep.join(문자열화(x) for x in args[0])
 
 
-def _거꾸로(interp, args):         # 뒤집은 새 목록
-    return list(reversed(args[0]))
+def _거꾸로(interp, args):         # 거꾸로(목록|문자열) → 뒤집은 새 목록/문자열(입력 타입 보존)
+    x = args[0]
+    if isinstance(x, str):
+        return x[::-1]
+    return list(reversed(x))
 
 
 def _ai_call(messages, model):     # 공통 OpenRouter 호출 (질문·체계질문 공유)

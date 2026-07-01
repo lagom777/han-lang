@@ -94,6 +94,8 @@ def test_builtins_collection():
     assert run('출력(범위(5))') == "[0, 1, 2, 3, 4]\n"
     assert run('출력(범위(2, 5))') == "[2, 3, 4]\n"
     assert run('출력(거꾸로([1, 2, 3]))') == "[3, 2, 1]\n"
+    assert run('출력(거꾸로("안녕"))') == "녕안\n"   # 문자열은 뒤집은 문자열(문자 목록 아님)
+    assert run('출력(거꾸로("abc"))') == "cba\n"
 
 
 def test_builtins_string():
