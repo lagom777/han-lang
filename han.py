@@ -970,6 +970,10 @@ def _항목들(interp, args):         # 사전의 [키, 값] 목록
     return [[k, v] for k, v in args[0].items()]
 
 
+def _사전만들기(interp, args):     # 사전만들기(키목록, 값목록) → {키:값} 사전(짧은 쪽까지, 항목들의 역)
+    return {k: v for k, v in zip(args[0], args[1])}
+
+
 def _값얻기(interp, args):         # 값얻기(사전, 키[, 기본값]) → 키 있으면 값, 없으면 기본값(기본 미지정 시 없음)
     d, k = args[0], args[1]
     if isinstance(d, dict) and k in d:
@@ -1257,6 +1261,7 @@ BUILTINS = {
     '무작위정수': _무작위정수,
     '무작위선택': _무작위선택,
     '병합': _병합,
+    '사전만들기': _사전만들기,
     '발생': _발생,
     '왼쪽채우기': _왼쪽채우기,
     '오른쪽채우기': _오른쪽채우기,
