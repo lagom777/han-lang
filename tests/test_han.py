@@ -678,7 +678,21 @@ def test_repl_command():
     assert repl_command(":끝") == ("quit", None)
     action, text = repl_command(":도움")
     assert action == "print" and "내장함수" in text and "출력" in text
+    assert ":변수" in text                            # 도움말이 :변수 안내
     assert repl_command(":없는명령")[0] == "print"   # 알 수 없는 명령도 안내
+
+
+def test_repl_command_변수():
+    # :변수 는 REPL 세션에 정의된 변수를 나열한다(interp 전달 시)
+    it = Interp()
+    assert repl_command(":변수", it) == ("print", "정의된 변수가 없어요")
+    repl_eval(it, "이름 = \"한\"")
+    repl_eval(it, "나이 = 20")
+    action, text = repl_command(":변수", it)
+    assert action == "print"
+    assert "이름 = 한" in text and "나이 = 20" in text
+    # interp 없이 호출해도 안전(하위호환)
+    assert repl_command(":변수")[0] == "print"
 
 
 def test_thousands():

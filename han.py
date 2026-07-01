@@ -1449,7 +1449,7 @@ def repl_eval(interp, src):
     return None
 
 
-def repl_command(line):
+def repl_command(line, interp=None):
     """REPL 메타 명령(:으로 시작). 일반 코드면 None, 명령이면 (동작, 출력문자열)."""
     cmd = line.strip()
     if not cmd.startswith(':'):
@@ -1457,7 +1457,17 @@ def repl_command(line):
     if cmd in (':종료', ':끝'):
         return ('quit', None)
     if cmd == ':도움':
-        return ('print', "명령: :도움(도움말) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
+        return ('print', "명령: :도움(도움말) :변수(정의된 변수) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
+    if cmd in (':변수', ':환경'):
+        if interp is None:
+            return ('print', "(변수 정보를 볼 수 없어요)")
+        vs = interp.g.vars
+        if not vs:
+            return ('print', "정의된 변수가 없어요")
+        def _repr(v):
+            s = 문자열화(v)
+            return s if len(s) <= 50 else s[:50] + '…'
+        return ('print', '\n'.join(f"{k} = {_repr(v)}" for k, v in vs.items()))
     return ('print', f"알 수 없는 명령: {cmd} (:도움 으로 목록)")
 
 
@@ -1478,8 +1488,8 @@ def main(argv):
                 line = input('... ' if buf else '한> ')
             except EOFError:
                 print(); break
-            if not buf:                   # 블록 중이 아니면 메타 명령 처리(:도움 :종료)
-                c = repl_command(line)
+            if not buf:                   # 블록 중이 아니면 메타 명령 처리(:도움 :변수 :종료)
+                c = repl_command(line, interp)
                 if c:
                     if c[0] == 'quit':
                         break
