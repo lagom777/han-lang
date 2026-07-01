@@ -836,6 +836,12 @@ def _다듬기(interp, args):          # 앞뒤 공백 제거
     return args[0].strip()
 
 
+def _말줄임(interp, args):          # 말줄임(문자열, 최대길이) → 길면 잘라 "…" 붙임(UI 표시·프롬프트 트림)
+    s = 문자열화(args[0])
+    n = int(args[1]) if len(args) > 1 else 0
+    return s if len(s) <= n else s[:max(0, n)] + "…"
+
+
 def _바꾸기(interp, args):          # 바꾸기(문자열, 옛, 새)
     return args[0].replace(args[1], args[2])
 
@@ -1234,6 +1240,7 @@ BUILTINS = {
     '대문자': _대문자,
     '소문자': _소문자,
     '다듬기': _다듬기,
+    '말줄임': _말줄임,
     '바꾸기': _바꾸기,
     '포함': _포함,
     '시작': _시작,
