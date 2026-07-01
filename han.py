@@ -761,6 +761,15 @@ def _범위(interp, args):           # 범위(끝) | 범위(시작,끝) | 범위
     return list(range(int(args[0]), int(args[1]), int(args[2])))
 
 
+def _간격(interp, args):           # 간격(시작, 끝, 개수) → 시작~끝 균등 분할 개수개 값(양끝 포함, linspace)
+    a, b = args[0], args[1]
+    n = int(args[2]) if len(args) > 2 else 0
+    if n <= 1:
+        return [a] if n == 1 else []
+    step = (b - a) / (n - 1)
+    return [a + step * i for i in range(n)]
+
+
 def _나누기(interp, args):         # 문자열 나누기 → 목록
     return args[0].split(args[1]) if len(args) > 1 else args[0].split()
 
@@ -1230,6 +1239,7 @@ BUILTINS = {
     '최대': _최대,
     '최소': _최소,
     '범위': _범위,
+    '간격': _간격,
     '나누기': _나누기,
     '위치': _위치,
     '합치기': _합치기,
