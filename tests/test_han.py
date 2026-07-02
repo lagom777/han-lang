@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""한(Han) 인터프리터 테스트. 실행: python3 tests/test_han.py"""
+"""가나다 인터프리터 테스트. 실행: python3 tests/test_han.py"""
 import io
 import os
 import sys
@@ -7,7 +7,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)  # 상대경로 가져오기("examples/..") 가 cwd와 무관하게 동작하도록
-from han import 실행소스, Interp, repl_eval, needs_more, repl_command  # noqa: E402
+from 가나다 import 실행소스, Interp, repl_eval, needs_more, repl_command  # noqa: E402
 
 
 def run(src):
@@ -292,8 +292,8 @@ def test_error_shows_column_caret():
 
 
 def test_module_import():
-    # 다른 .han 파일의 함수/변수를 가져와 사용
-    out = run('가져오기 "examples/lib.han"\n출력(곱하기(6, 7))\n출력(제곱(5))')
+    # 다른 .가나다 파일의 함수/변수를 가져와 사용
+    out = run('가져오기 "examples/lib.가나다"\n출력(곱하기(6, 7))\n출력(제곱(5))')
     assert out == "42\n25\n"
 
 
@@ -898,7 +898,7 @@ def test_slice():
 
 def test_flagship_example():
     # 종합 예제 — 전 toolkit 결합(판매 분석)이 기대 출력을 낸다
-    with open(os.path.join(ROOT, "examples", "flagship.han"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "examples", "flagship.가나다"), encoding="utf-8") as f:
         src = f.read()
     out = io.StringIO()
     실행소스(src, out=out, base_dir=os.path.join(ROOT, "examples"))
@@ -911,7 +911,7 @@ def test_flagship_example():
 
 def test_flagship_pipeline_example():
     # 실전 파이프라인 — 파일 I/O + JSON + toolkit 결합(쓰기→읽기→분석→쓰기→읽기)
-    with open(os.path.join(ROOT, "examples", "flagship_pipeline.han"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "examples", "flagship_pipeline.가나다"), encoding="utf-8") as f:
         src = f.read()
     out = io.StringIO()
     실행소스(src, out=out, base_dir=os.path.join(ROOT, "examples"))
@@ -922,16 +922,16 @@ def test_flagship_pipeline_example():
 
 
 def test_all_examples_run():
-    # 모든 examples/*.han 이 오류 없이 실행되는지(회귀 방지)
+    # 모든 examples/*.가나다 가 오류 없이 실행되는지(회귀 방지)
     import glob
-    os.environ.pop('OPENROUTER_API_KEY', None)   # ai.han → 안내 stub 경로
+    os.environ.pop('OPENROUTER_API_KEY', None)   # ai.가나다 → 안내 stub 경로
     exdir = os.path.join(ROOT, 'examples')
-    paths = sorted(glob.glob(os.path.join(exdir, '*.han')))
+    paths = sorted(glob.glob(os.path.join(exdir, '*.가나다')))
     assert len(paths) >= 10
     old = sys.stdin
     try:
         for path in paths:
-            sys.stdin = io.StringIO("홍길동\n30\n40\n50\n")  # input.han 용
+            sys.stdin = io.StringIO("홍길동\n30\n40\n50\n")  # input.가나다 용
             with open(path, encoding='utf-8') as f:
                 src = f.read()
             try:

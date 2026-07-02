@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""한(Han) — 한글 프로그래밍 언어 · 독립 인터프리터 (v0)
+"""가나다 — 한글 프로그래밍 언어 · 독립 인터프리터 (v0)
 
 진짜 새 언어다: 자체 문법 + 자체 렉서·파서·트리워킹 인터프리터로 직접 실행한다.
 파이썬으로 트랜스파일하지 않는다(구현 호스트가 파이썬일 뿐, 언어는 독립적이다).
 
 사용법:
-  python3 han.py 실행 프로그램.han      # 파일 실행
-  python3 han.py            # 대화형(REPL)
+  python3 가나다.py 실행 프로그램.가나다      # 파일 실행
+  python3 가나다.py            # 대화형(REPL)
 """
 import sys
 import os
@@ -1526,12 +1526,12 @@ def main(argv):
         except HanError as e:
             print(f"오류: {e}", file=sys.stderr); sys.exit(1)
     elif len(argv) == 1 or (len(argv) == 2 and argv[1] in ('repl', '대화')):
-        print("한(Han) v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. :도움 으로 명령, 종료는 :종료/Ctrl-D")
+        print("가나다 v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. :도움 으로 명령, 종료는 :종료/Ctrl-D")
         interp = Interp()
         buf = ''
         while True:
             try:
-                line = input('... ' if buf else '한> ')
+                line = input('... ' if buf else '가나다> ')
             except EOFError:
                 print(); break
             if not buf:                   # 블록 중이 아니면 메타 명령 처리(:도움 :변수 :종료)
@@ -1554,7 +1554,7 @@ def main(argv):
             except (HanError, Return) as e:
                 print(f"오류: {e}")
     else:
-        print("사용법: python3 han.py 실행 <파일.han>  |  python3 han.py 대화", file=sys.stderr)
+        print("사용법: python3 가나다.py 실행 <파일.가나다>  |  python3 가나다.py 대화", file=sys.stderr)
         sys.exit(2)
 
 
