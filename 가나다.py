@@ -1285,6 +1285,11 @@ def _오른쪽채우기(interp, args):   # 오른쪽채우기(값, 너비[, 채�
     return s.ljust(int(args[1]), fill[0] if fill else ' ')
 
 
+def _가운데채우기(interp, args):   # 가운데채우기(값, 너비[, 채움]) → 양쪽 채움(가운데 정렬, 홀수는 오른쪽에)
+    s = 문자열화(args[0]); fill = 문자열화(args[2]) if len(args) > 2 else ' '
+    return s.center(int(args[1]), fill[0] if fill else ' ')
+
+
 def _교집합(interp, args):         # 교집합(가, 나) → 가에 있으면서 나에도 있는 원소(가 순서, 중복 제거)
     나 = args[1]
     out = []
@@ -1406,6 +1411,7 @@ BUILTINS = {
     '발생': _발생,
     '왼쪽채우기': _왼쪽채우기,
     '오른쪽채우기': _오른쪽채우기,
+    '가운데채우기': _가운데채우기,
     '교집합': _교집합,
     '합집합': _합집합,
     '차집합': _차집합,
