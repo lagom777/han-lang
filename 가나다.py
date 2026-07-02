@@ -1434,6 +1434,59 @@ def _서버(interp, args):           # 서버(포트, 라우트[, 정적폴더])
     return None
 
 
+def _자료핸들(이름, v):            # 실행·질의·자료닫기 공용 — 자료열기() 핸들인지 검증
+    import sqlite3
+    if not isinstance(v, sqlite3.Connection):
+        raise HanError(f"{이름}: 첫 인자는 자료열기() 가 돌려준 핸들이어야 합니다")
+    return v
+
+
+def _자료인자(이름, args):         # 실행·질의 공용 — 선택적 인자목록(? 자리에 순서대로) 검증
+    인자 = args[2] if len(args) > 2 else []
+    if not isinstance(인자, list):
+        raise HanError(f"{이름}: 인자목록은 목록이어야 합니다 — SQL 의 ? 자리에 순서대로 들어갑니다")
+    return 인자
+
+
+def _자료열기(interp, args):       # 자료열기(경로) → SQLite 핸들(실행·질의에 넘김, 자료닫기로 닫음). ":memory:" 는 메모리 전용
+    import sqlite3
+    경로 = 문자열화(args[0])
+    try:
+        conn = sqlite3.connect(경로, check_same_thread=False)   # 서버 라우트(다른 스레드)에서도 쓸 수 있게
+    except sqlite3.Error as e:
+        raise HanError(f"자료열기 오류: '{경로}' — {e}")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _실행(interp, args):           # 실행(핸들, SQL[, 인자목록]) → 변경 행 수(CREATE 등은 0). 문장마다 자동 커밋
+    import sqlite3
+    conn = _자료핸들('실행', args[0])
+    인자 = _자료인자('실행', args)
+    try:
+        cur = conn.execute(문자열화(args[1]), 인자)
+        conn.commit()
+    except sqlite3.Error as e:
+        raise HanError(f"실행 오류: {e} (값 끼워넣기는 문자열 잇기 대신 ? 와 인자목록을 쓰세요)")
+    return max(cur.rowcount, 0)
+
+
+def _질의(interp, args):           # 질의(핸들, SQL[, 인자목록]) → 행 목록(각 행은 {컬럼명: 값} 사전)
+    import sqlite3
+    conn = _자료핸들('질의', args[0])
+    인자 = _자료인자('질의', args)
+    try:
+        rows = conn.execute(문자열화(args[1]), 인자).fetchall()
+    except sqlite3.Error as e:
+        raise HanError(f"질의 오류: {e} (값 끼워넣기는 문자열 잇기 대신 ? 와 인자목록을 쓰세요)")
+    return [dict(r) for r in rows]
+
+
+def _자료닫기(interp, args):       # 자료닫기(핸들) → 없음. 다 쓰면 닫아 파일 잠금 해제
+    _자료핸들('자료닫기', args[0]).close()
+    return None
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -1536,6 +1589,10 @@ BUILTINS = {
     '합집합': _합집합,
     '차집합': _차집합,
     '서버': _서버,
+    '자료열기': _자료열기,
+    '실행': _실행,
+    '질의': _질의,
+    '자료닫기': _자료닫기,
 }
 
 

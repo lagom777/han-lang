@@ -1124,6 +1124,85 @@ def test_쿠키서버():
         httpd.server_close()
 
 
+def test_자료_왕복():
+    # SQLite — 메모리 DB에 생성→삽입→질의 왕복 (한글 테이블·컬럼·값 그대로)
+    src = (
+        '자료 = 자료열기(":memory:")\n'
+        '실행(자료, "CREATE TABLE 방명록(이름 TEXT, 말 TEXT)")\n'
+        '실행(자료, "INSERT INTO 방명록 VALUES (?, ?)", ["철수", "안녕하세요"])\n'
+        '행들 = 질의(자료, "SELECT * FROM 방명록")\n'
+        '출력(길이(행들))\n'
+        '출력(행들[0]["이름"] + ": " + 행들[0]["말"])\n'
+        '자료닫기(자료)\n'
+    )
+    assert run(src) == "1\n철수: 안녕하세요\n"
+
+
+def test_자료_파일저장():
+    # 파일 DB — 실행마다 자동 커밋이라 닫았다 다시 열어도 데이터 유지
+    import tempfile
+    import shutil
+    d = tempfile.mkdtemp()
+    경로 = os.path.join(d, "자료.db")
+    try:
+        run(
+            '자료 = 자료열기("' + 경로 + '")\n'
+            '실행(자료, "CREATE TABLE t(x TEXT)")\n'
+            '실행(자료, "INSERT INTO t VALUES (?)", ["한글값"])\n'
+            '자료닫기(자료)\n'
+        )
+        out = run(
+            '자료 = 자료열기("' + 경로 + '")\n'
+            '행들 = 질의(자료, "SELECT x FROM t")\n'
+            '출력(행들[0]["x"])\n'
+            '자료닫기(자료)\n'
+        )
+        assert out == "한글값\n"
+    finally:
+        shutil.rmtree(d)
+
+
+def test_자료_변경행수_바인딩():
+    # 변경 행 수 — CREATE 0, INSERT 1, UPDATE/DELETE 는 걸린 행 수. ? 바인딩은 특수문자도 값 그대로
+    src = (
+        '자료 = 자료열기(":memory:")\n'
+        '출력(실행(자료, "CREATE TABLE 점수(이름 TEXT, 점 INTEGER)"))\n'
+        '출력(실행(자료, "INSERT INTO 점수 VALUES (?, ?)", ["가", 10]))\n'
+        '실행(자료, "INSERT INTO 점수 VALUES (?, ?)", ["나", 20])\n'
+        '실행(자료, "INSERT INTO 점수 VALUES (?, ?)", ["다\'; DROP TABLE 점수; --", 30])\n'
+        '출력(실행(자료, "UPDATE 점수 SET 점 = 점 + 1 WHERE 점 >= ?", [10]))\n'
+        '행들 = 질의(자료, "SELECT 이름 FROM 점수 WHERE 점 = ?", [31])\n'
+        '출력(행들[0]["이름"])\n'
+        '출력(실행(자료, "DELETE FROM 점수 WHERE 점 > ?", [0]))\n'
+        '자료닫기(자료)\n'
+    )
+    assert run(src) == "0\n1\n3\n다'; DROP TABLE 점수; --\n3\n"
+
+
+def test_자료_없는경로_가나다오류():
+    # 없는 디렉터리의 DB 파일 → 가나다 오류(시도/잡기로 잡힘)
+    src = (
+        '시도 {\n'
+        '    자료열기("/없는_폴더_가나다_테스트/x.db")\n'
+        '    출력("여기 오면 안 됨")\n'
+        '} 잡기(오류) {\n'
+        '    출력("잡음")\n'
+        '    출력(포함(오류, "자료열기"))\n'
+        '}\n'
+    )
+    assert run(src) == "잡음\n참\n"
+
+
+def test_자료_핸들검증():
+    # 핸들 아닌 값을 넘기면 안내 오류 (실행·질의·자료닫기 공통)
+    src = (
+        '시도 { 실행(123, "SELECT 1") } 잡기(오류) { 출력(포함(오류, "핸들")) }\n'
+        '시도 { 질의("x", "SELECT 1") } 잡기(오류) { 출력(포함(오류, "핸들")) }\n'
+        '시도 { 자료닫기([1]) } 잡기(오류) { 출력(포함(오류, "핸들")) }\n'
+    )
+    assert run(src) == "참\n참\n참\n"
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

@@ -88,6 +88,7 @@ python3 tests/test_han.py                 # 테스트
 - **무작위**: `무작위()`(0~1) `무작위정수(시작,끝)` `무작위선택(목록)`
 - **AI**: `모델([이름])`(기본 LLM 설정/조회) · `질문(프롬프트[, 모델])` · `체계질문(시스템, 사용자[, 모델])` · `분류(텍스트, 보기목록[, 모델])`(LLM 분류) — OpenRouter LLM 호출 (`OPENROUTER_API_KEY` 필요, 없으면 안내)
 - **웹**: `서버(포트, 라우트[, 정적폴더])` — 라우트 `{경로:함수}` 로 HTTP 서비스(블로킹). 각 함수는 요청 `{메서드,경로,질의,본문,쿠키}` 를 받아 문자열(→200 text/html) 또는 `{상태,헤더,본문[,쿠키설정]}` 을 반환. 없는 경로는 404. 파이썬 표준 라이브러리만 사용(외부 의존성 0) → **[웹 배포](#웹-배포)** 참고
+- **자료(SQLite)**: `자료열기(경로)` → 핸들(`":memory:"` 는 메모리 전용) · `실행(핸들, SQL[, 인자목록])` → 변경 행 수(문장마다 자동 커밋; CREATE 등은 0) · `질의(핸들, SQL[, 인자목록])` → 행 목록(각 행은 `{컬럼명:값}` 사전) · `자료닫기(핸들)`. 값 끼워넣기는 문자열 잇기 대신 **`?` 자리표시자 + 인자목록**(SQL 주입 방지). 한글 테이블·컬럼명 OK. 트랜잭션은 추후 과제. 예제: `examples/자료.가나다`(방명록)
 
 ## 오류 처리
 - `시도 { } 잡기(오류) { }` 로 잡고, `발생("메시지")` 로 직접 던진다.
@@ -97,7 +98,7 @@ python3 tests/test_han.py                 # 테스트
 - 사전 키 오타엔 비슷한 키 제안 / 없으면 키 목록 — 예: `키 없음: 최고점쑤 (혹시 '최고점수'?)`
 
 ## 예제 (`examples/`)
-**flagship(종합 — 판매 데이터 분석)** · **flagship_pipeline(실전 — 파일 읽기→분석→리포트 쓰기)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random
+**flagship(종합 — 판매 데이터 분석)** · **flagship_pipeline(실전 — 파일 읽기→분석→리포트 쓰기)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random · 자료(SQLite 방명록)
 
 ## 웹 배포
 가나다로 웹 앱을 만들고 Docker로 어디든 배포할 수 있어요. 서버는 파이썬 표준 라이브러리로만 돌아가서 **외부 의존성이 0** 입니다.
@@ -108,7 +109,7 @@ python3 tests/test_han.py                 # 테스트
 함수 인사(요청) { 반환 "이름: " + 값얻기(요청["질의"], "이름", "손님") }
 서버(8000, {"/": 홈, "/안녕": 인사})   # http://localhost:8000
 ```
-각 라우트 함수는 요청 사전 `{메서드, 경로, 질의, 본문, 쿠키}` 하나를 받아 문자열(→200 text/html) 또는 `{상태, 헤더, 본문[, 쿠키설정]}` 사전을 돌려줍니다. 전체 예제: `examples/웹.가나다`(홈·질의 되돌리기·AI·쿠키 방문 횟수 라우트).
+각 라우트 함수는 요청 사전 `{메서드, 경로, 질의, 본문, 쿠키}` 하나를 받아 문자열(→200 text/html) 또는 `{상태, 헤더, 본문[, 쿠키설정]}` 사전을 돌려줍니다. 전체 예제: `examples/웹.가나다`(홈·질의 되돌리기·AI·쿠키 방문 횟수·SQLite 방명록 라우트).
 
 **쿠키** — Cookie 헤더는 퍼센트 디코딩되어 `요청["쿠키"]` 사전(`{이름:값}`)으로 들어오고, 응답 사전에 `"쿠키설정": {이름:값}` 을 넣으면 각각 `Set-Cookie: 이름=값; Path=/; HttpOnly`(한글은 퍼센트 인코딩)로 나갑니다. 예제: `examples/웹.가나다` 의 `/방문`. 만료 시각·서명은 아직 없어요(추후 과제).
 
