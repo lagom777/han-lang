@@ -87,6 +87,7 @@ python3 tests/test_han.py                 # 테스트
 - **수학**: `절댓값` `반올림(수[,자리])` `올림` `내림` `제곱근` `거듭제곱(밑,지수)` `천단위(수)`(콤마 표기) `사이값(값,최소,최대)`(clamp) `최대공약수(가,나)` `최소공배수(가,나)`
 - **무작위**: `무작위()`(0~1) `무작위정수(시작,끝)` `무작위선택(목록)`
 - **AI**: `모델([이름])`(기본 LLM 설정/조회) · `질문(프롬프트[, 모델])` · `체계질문(시스템, 사용자[, 모델])` · `분류(텍스트, 보기목록[, 모델])`(LLM 분류) — OpenRouter LLM 호출 (`OPENROUTER_API_KEY` 필요, 없으면 안내)
+- **웹**: `서버(포트, 라우트)` — 라우트 `{경로:함수}` 로 HTTP 서비스(블로킹). 각 함수는 요청 `{메서드,경로,질의,본문}` 을 받아 문자열(→200 text/html) 또는 `{상태,헤더,본문}` 을 반환. 없는 경로는 404. 파이썬 표준 라이브러리만 사용(외부 의존성 0) → **[웹 배포](#웹-배포)** 참고
 
 ## 오류 처리
 - `시도 { } 잡기(오류) { }` 로 잡고, `발생("메시지")` 로 직접 던진다.
@@ -97,6 +98,31 @@ python3 tests/test_han.py                 # 테스트
 
 ## 예제 (`examples/`)
 **flagship(종합 — 판매 데이터 분석)** · **flagship_pipeline(실전 — 파일 읽기→분석→리포트 쓰기)** · hello · fib · fizzbuzz · list · dict · builtins · foreach · ai · string · control · lambda · math · input · use_module(+lib) · dict_helpers · compound · slice · error_handling · json · zip · sort_by · search · unique_count · merge · enumerate · default_params · destructure · range_step · raise · pad · random
+
+## 웹 배포
+가나다로 웹 앱을 만들고 Docker로 어디든 배포할 수 있어요. 서버는 파이썬 표준 라이브러리로만 돌아가서 **외부 의존성이 0** 입니다.
+
+**만들기** — `서버(포트, 라우트)` 하나면 끝. 라우트는 `{경로: 함수}` 사전:
+```가나다
+함수 홈(요청) { 반환 "<h1>안녕, 가나다 웹!</h1>" }
+함수 인사(요청) { 반환 "이름: " + 값얻기(요청["질의"], "이름", "손님") }
+서버(8000, {"/": 홈, "/안녕": 인사})   # http://localhost:8000
+```
+각 라우트 함수는 요청 사전 `{메서드, 경로, 질의, 본문}` 하나를 받아 문자열(→200 text/html) 또는 `{상태, 헤더, 본문}` 사전을 돌려줍니다. 전체 예제: `examples/웹.가나다`(홈·질의 되돌리기·AI 라우트).
+
+**로컬 실행**
+```bash
+python3 가나다.py 실행 examples/웹.가나다
+curl http://localhost:8000/
+curl "http://localhost:8000/안녕?이름=철수"
+```
+
+**Docker 배포**
+```bash
+docker build -t ganada-web .        # 이미지 태그는 ASCII 만 허용
+docker run -p 8000:8000 ganada-web
+```
+`Dockerfile` 은 `python:3.12-slim` 위에 `가나다.py` 와 앱 파일만 복사합니다. 서버가 `0.0.0.0:8000` 에 바인딩하므로 컨테이너 밖에서 바로 접근돼요. Docker 이미지를 받는 곳이면 어디든 배포 가능: **Fly.io · Railway · Render · 일반 VPS**.
 
 ## 로드맵 (빌드 루프로 확장)
 표준 라이브러리 확충 · 더 풍부한 오류(열 위치) · 패키지/네임스페이스 · (장기) 셀프호스팅·네이티브 백엔드.

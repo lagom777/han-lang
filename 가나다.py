@@ -1334,6 +1334,72 @@ def _차집합(interp, args):         # 차집합(가, 나) → 가에 있고 �
     return out
 
 
+def _웹서버만들기(interp, 포트, 라우트):
+    """포트·라우트(경로 문자열 → 가나다 함수)로 HTTPServer 를 구성해 돌려준다(아직 serve 안 함).
+    핸들러는 요청 사전 {메서드,경로,질의,본문} 하나를 받아, 문자열(→200 text/html) 또는
+    사전 {상태,헤더,본문} 을 반환한다. 없는 경로는 404. 테스트·서버 빌트인이 공유."""
+    import http.server
+    import urllib.parse
+
+    기본헤더 = {'Content-Type': 'text/html; charset=utf-8'}
+
+    class _핸들러(http.server.BaseHTTPRequestHandler):
+        def _응답(self, 상태, 헤더, 본문):
+            데이터 = 문자열화(본문).encode('utf-8')
+            self.send_response(int(상태))
+            for k, v in 헤더.items():
+                self.send_header(문자열화(k), 문자열화(v))
+            self.send_header('Content-Length', str(len(데이터)))
+            self.end_headers()
+            self.wfile.write(데이터)
+
+        def _처리(self):
+            parts = urllib.parse.urlsplit(self.path)
+            경로 = urllib.parse.unquote(parts.path)
+            질의 = {k: v[0] for k, v in urllib.parse.parse_qs(parts.query).items()}
+            길이 = int(self.headers.get('Content-Length') or 0)
+            본문 = self.rfile.read(길이).decode('utf-8') if 길이 else ''
+            요청 = {'메서드': self.command, '경로': 경로, '질의': 질의, '본문': 본문}
+            fn = 라우트.get(경로)
+            if fn is None:
+                self._응답(404, 기본헤더, '404 없는 경로: ' + 경로)
+                return
+            try:
+                결과 = interp.apply_func(fn, [요청])
+            except HanError as e:
+                self._응답(500, 기본헤더, '500 서버 오류: ' + str(e))
+                return
+            if isinstance(결과, dict):
+                self._응답(결과.get('상태', 200), 결과.get('헤더') or 기본헤더, 결과.get('본문', ''))
+            else:
+                self._응답(200, 기본헤더, 결과)
+
+        do_GET = _처리
+        do_POST = _처리
+
+        def log_message(self, *a):      # 기본 요청 로그 억제(시작 줄만 남긴다)
+            pass
+
+    return http.server.HTTPServer(('', int(포트)), _핸들러)
+
+
+def _서버(interp, args):           # 서버(포트, 라우트) — 라우트{경로:함수}로 HTTP 서비스(블로킹). 포트 0이면 임의 포트.
+    포트 = int(args[0]) if args else 8000
+    라우트 = args[1] if len(args) > 1 else {}
+    if not isinstance(라우트, dict):
+        raise HanError('서버: 라우트는 {경로:함수} 사전이어야 합니다')
+    httpd = _웹서버만들기(interp, 포트, 라우트)
+    interp.out.write('가나다 서버: http://localhost:' + str(httpd.server_address[1]) + '\n')
+    interp.out.flush()
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.server_close()
+    return None
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -1435,6 +1501,7 @@ BUILTINS = {
     '교집합': _교집합,
     '합집합': _합집합,
     '차집합': _차집합,
+    '서버': _서버,
 }
 
 

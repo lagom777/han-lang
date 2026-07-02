@@ -7,7 +7,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)  # 상대경로 가져오기("examples/..") 가 cwd와 무관하게 동작하도록
-from 가나다 import 실행소스, Interp, repl_eval, needs_more, repl_command  # noqa: E402
+from 가나다 import 실행소스, Interp, repl_eval, needs_more, repl_command, _웹서버만들기  # noqa: E402
 
 
 def run(src):
@@ -948,7 +948,9 @@ def test_all_examples_run():
     import glob
     os.environ.pop('OPENROUTER_API_KEY', None)   # ai.가나다 → 안내 stub 경로
     exdir = os.path.join(ROOT, 'examples')
-    paths = sorted(glob.glob(os.path.join(exdir, '*.가나다')))
+    # 웹.가나다 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버 가 따로 검증
+    paths = [p for p in sorted(glob.glob(os.path.join(exdir, '*.가나다')))
+             if os.path.basename(p) != '웹.가나다']
     assert len(paths) >= 10
     old = sys.stdin
     try:
@@ -962,6 +964,47 @@ def test_all_examples_run():
                 raise AssertionError(os.path.basename(path) + " 실행 실패: " + str(e))
     finally:
         sys.stdin = old
+
+
+def test_서버():
+    # 서버(포트, 라우트) — 임의 포트(0)에 바인딩, 데몬 스레드로 서비스, 실제 HTTP 요청 검증
+    import threading
+    import urllib.request
+    import urllib.parse
+    import urllib.error
+
+    src = (
+        '함수 홈(요청) { 반환 "<h1>안녕 가나다</h1>" }\n'
+        '함수 인사(요청) {\n'
+        '    이름 = 값얻기(요청["질의"], "이름", "손님")\n'
+        '    반환 {"상태": 200, "헤더": {"Content-Type": "text/plain; charset=utf-8"}, "본문": "이름=" + 이름}\n'
+        '}\n'
+        '라우트 = {"/": 홈, "/안녕": 인사}\n'
+    )
+    interp = 실행소스(src, out=io.StringIO())
+    httpd = _웹서버만들기(interp, 0, interp.g.vars['라우트'])
+    포트 = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f"http://127.0.0.1:{포트}"
+        with urllib.request.urlopen(base + "/") as r:
+            assert r.status == 200
+            assert "안녕 가나다" in r.read().decode("utf-8")
+        # 질의 라우트 — 한글 경로·값은 퍼센트 인코딩(브라우저·urllib 자동)
+        url = base + urllib.parse.quote("/안녕") + "?" + urllib.parse.urlencode({"이름": "철수"})
+        with urllib.request.urlopen(url) as r:
+            assert r.status == 200
+            assert r.read().decode("utf-8") == "이름=철수"
+        # 없는 경로 → 404
+        try:
+            urllib.request.urlopen(base + "/nope")
+            assert False, "404 가 나야 함"
+        except urllib.error.HTTPError as e:
+            assert e.code == 404
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 if __name__ == '__main__':
