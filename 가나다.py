@@ -1241,6 +1241,15 @@ def _누적합(interp, args):         # 누적합(목록) → 누적 합 목록 
     return out
 
 
+def _누적곱(interp, args):         # 누적곱(목록) → 누적 곱 목록 [a, a*b, a*b*c, ...] (running product)
+    out = []
+    p = 1
+    for x in args[0]:
+        p *= x
+        out.append(p)
+    return out
+
+
 def _전치(interp, args):           # 전치(2차원목록) → 행과 열을 바꾼 목록 (transpose). 짧은 행 기준
     rows = args[0]
     if not rows:
@@ -1402,6 +1411,7 @@ BUILTINS = {
     '평탄화': _평탄화,
     '묶기': _묶기,
     '누적합': _누적합,
+    '누적곱': _누적곱,
     '전치': _전치,
     '무작위': _무작위,
     '무작위정수': _무작위정수,

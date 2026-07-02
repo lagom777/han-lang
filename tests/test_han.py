@@ -654,6 +654,12 @@ def test_cumsum():
     assert run('출력(누적합([10, -3, 5]))') == "[10, 7, 12]\n"  # 음수
 
 
+def test_누적곱():
+    assert run('출력(누적곱([1, 2, 3, 4]))') == "[1, 2, 6, 24]\n"
+    assert run('출력(누적곱([5]))') == "[5]\n"           # 단일
+    assert run('출력(누적곱([]))') == "[]\n"             # 빈 목록
+
+
 def test_listdir():
     import tempfile, os, shutil
     d = os.path.join(tempfile.gettempdir(), "han_listdir_test")
