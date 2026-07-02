@@ -1250,6 +1250,15 @@ def _누적곱(interp, args):         # 누적곱(목록) → 누적 곱 목록 
     return out
 
 
+def _회전(interp, args):           # 회전(목록, 칸수) → 왼쪽으로 칸수만큼 회전한 새 목록(음수면 오른쪽, 길이 초과는 나머지 처리)
+    xs = list(args[0])
+    n = len(xs)
+    if n == 0:
+        return []
+    k = int(args[1]) % n if len(args) > 1 else 0
+    return xs[k:] + xs[:k]
+
+
 def _전치(interp, args):           # 전치(2차원목록) → 행과 열을 바꾼 목록 (transpose). 짧은 행 기준
     rows = args[0]
     if not rows:
@@ -1412,6 +1421,7 @@ BUILTINS = {
     '묶기': _묶기,
     '누적합': _누적합,
     '누적곱': _누적곱,
+    '회전': _회전,
     '전치': _전치,
     '무작위': _무작위,
     '무작위정수': _무작위정수,

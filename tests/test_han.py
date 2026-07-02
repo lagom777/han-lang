@@ -660,6 +660,16 @@ def test_누적곱():
     assert run('출력(누적곱([]))') == "[]\n"             # 빈 목록
 
 
+def test_회전():
+    # 회전: 왼쪽으로 n칸(음수면 오른쪽), 길이 초과는 나머지 처리
+    assert run('출력(회전([1, 2, 3, 4, 5], 2))') == "[3, 4, 5, 1, 2]\n"   # 왼쪽 2칸
+    assert run('출력(회전([1, 2, 3, 4, 5], -1))') == "[5, 1, 2, 3, 4]\n"  # 음수=오른쪽
+    assert run('출력(회전([1, 2, 3], 3))') == "[1, 2, 3]\n"               # 한 바퀴=원상복귀
+    assert run('출력(회전([1, 2, 3], 5))') == "[3, 1, 2]\n"               # 길이 초과=나머지
+    assert run('출력(회전([1, 2, 3], 0))') == "[1, 2, 3]\n"               # 0칸=그대로
+    assert run('출력(회전([], 3))') == "[]\n"                             # 빈 목록
+
+
 def test_listdir():
     import tempfile, os, shutil
     d = os.path.join(tempfile.gettempdir(), "han_listdir_test")
