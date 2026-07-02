@@ -1334,18 +1334,24 @@ def _차집합(interp, args):         # 차집합(가, 나) → 가에 있고 �
     return out
 
 
-def _웹서버만들기(interp, 포트, 라우트):
+def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
     """포트·라우트(경로 문자열 → 가나다 함수)로 HTTPServer 를 구성해 돌려준다(아직 serve 안 함).
     핸들러는 요청 사전 {메서드,경로,질의,본문} 하나를 받아, 문자열(→200 text/html) 또는
-    사전 {상태,헤더,본문} 을 반환한다. 없는 경로는 404. 테스트·서버 빌트인이 공유."""
+    사전 {상태,헤더,본문} 을 반환한다. 없는 경로는 404. 테스트·서버 빌트인이 공유.
+    정적폴더를 주면 라우트에 없는 경로는 그 폴더의 파일로 서빙(라우트가 우선)."""
     import http.server
     import urllib.parse
 
     기본헤더 = {'Content-Type': 'text/html; charset=utf-8'}
+    타입표 = {'.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+              '.js': 'text/javascript; charset=utf-8', '.png': 'image/png',
+              '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml',
+              '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8',
+              '.txt': 'text/plain; charset=utf-8'}
 
     class _핸들러(http.server.BaseHTTPRequestHandler):
         def _응답(self, 상태, 헤더, 본문):
-            데이터 = 문자열화(본문).encode('utf-8')
+            데이터 = 본문 if isinstance(본문, bytes) else 문자열화(본문).encode('utf-8')
             self.send_response(int(상태))
             for k, v in 헤더.items():
                 self.send_header(문자열화(k), 문자열화(v))
@@ -1362,7 +1368,10 @@ def _웹서버만들기(interp, 포트, 라우트):
             요청 = {'메서드': self.command, '경로': 경로, '질의': 질의, '본문': 본문}
             fn = 라우트.get(경로)
             if fn is None:
-                self._응답(404, 기본헤더, '404 없는 경로: ' + 경로)
+                if 정적폴더 is not None:
+                    self._정적(경로)
+                else:
+                    self._응답(404, 기본헤더, '404 없는 경로: ' + 경로)
                 return
             try:
                 결과 = interp.apply_func(fn, [요청])
@@ -1374,6 +1383,19 @@ def _웹서버만들기(interp, 포트, 라우트):
             else:
                 self._응답(200, 기본헤더, 결과)
 
+        def _정적(self, 경로):        # 정적폴더 안의 파일 서빙. 경로 이탈(../)은 realpath 검증으로 차단 → 404
+            if 경로.endswith('/'):
+                경로 += 'index.html'
+            뿌리 = os.path.realpath(정적폴더)
+            실경로 = os.path.realpath(os.path.join(뿌리, 경로.lstrip('/')))
+            if not (실경로 == 뿌리 or 실경로.startswith(뿌리 + os.sep)) or not os.path.isfile(실경로):
+                self._응답(404, 기본헤더, '404 없는 경로: ' + 경로)
+                return
+            with open(실경로, 'rb') as f:
+                데이터 = f.read()
+            확장자 = os.path.splitext(실경로)[1].lower()
+            self._응답(200, {'Content-Type': 타입표.get(확장자, 'application/octet-stream')}, 데이터)
+
         do_GET = _처리
         do_POST = _처리
 
@@ -1383,12 +1405,13 @@ def _웹서버만들기(interp, 포트, 라우트):
     return http.server.HTTPServer(('', int(포트)), _핸들러)
 
 
-def _서버(interp, args):           # 서버(포트, 라우트) — 라우트{경로:함수}로 HTTP 서비스(블로킹). 포트 0이면 임의 포트.
+def _서버(interp, args):           # 서버(포트, 라우트[, 정적폴더]) — 라우트{경로:함수}로 HTTP 서비스(블로킹). 포트 0이면 임의 포트. 정적폴더를 주면 라우트 밖 경로는 폴더 파일 서빙.
     포트 = int(args[0]) if args else 8000
     라우트 = args[1] if len(args) > 1 else {}
     if not isinstance(라우트, dict):
         raise HanError('서버: 라우트는 {경로:함수} 사전이어야 합니다')
-    httpd = _웹서버만들기(interp, 포트, 라우트)
+    정적폴더 = 문자열화(args[2]) if len(args) > 2 else None
+    httpd = _웹서버만들기(interp, 포트, 라우트, 정적폴더)
     interp.out.write('가나다 서버: http://localhost:' + str(httpd.server_address[1]) + '\n')
     interp.out.flush()
     try:

@@ -948,9 +948,9 @@ def test_all_examples_run():
     import glob
     os.environ.pop('OPENROUTER_API_KEY', None)   # ai.가나다 → 안내 stub 경로
     exdir = os.path.join(ROOT, 'examples')
-    # 웹.가나다 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버 가 따로 검증
+    # 웹.가나다·정적웹.가나다 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버/test_정적서버 가 따로 검증
     paths = [p for p in sorted(glob.glob(os.path.join(exdir, '*.가나다')))
-             if os.path.basename(p) != '웹.가나다']
+             if os.path.basename(p) not in ('웹.가나다', '정적웹.가나다')]
     assert len(paths) >= 10
     old = sys.stdin
     try:
@@ -1005,6 +1005,64 @@ def test_서버():
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_정적서버():
+    # 서버(포트, 라우트, 정적폴더) — 라우트 밖 경로는 폴더 파일 서빙, 라우트 우선, ../ 이탈 차단
+    import threading
+    import shutil
+    import tempfile
+    import http.client
+    import urllib.request
+    import urllib.parse
+    import urllib.error
+
+    d = os.path.join(tempfile.gettempdir(), "han_static_test")
+    if os.path.exists(d):
+        shutil.rmtree(d)
+    os.makedirs(os.path.join(d, "public"))
+    with open(os.path.join(d, "public", "index.html"), "w", encoding="utf-8") as f:
+        f.write("<h1>정적 홈</h1>")
+    with open(os.path.join(d, "public", "style.css"), "w", encoding="utf-8") as f:
+        f.write("body { color: red }")
+    with open(os.path.join(d, "비밀.txt"), "w", encoding="utf-8") as f:      # 폴더 밖 — 접근되면 안 됨
+        f.write("극비자료")
+
+    interp = 실행소스('함수 홈(요청) { 반환 "라우트 홈" }\n라우트 = {"/": 홈}\n', out=io.StringIO())
+    httpd = _웹서버만들기(interp, 0, interp.g.vars['라우트'], os.path.join(d, "public"))
+    포트 = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f"http://127.0.0.1:{포트}"
+        # 정적 파일 + 올바른 Content-Type
+        with urllib.request.urlopen(base + "/index.html") as r:
+            assert r.status == 200
+            assert r.headers["Content-Type"] == "text/html; charset=utf-8"
+            assert "정적 홈" in r.read().decode("utf-8")
+        with urllib.request.urlopen(base + "/style.css") as r:
+            assert r.headers["Content-Type"] == "text/css; charset=utf-8"
+            assert "color: red" in r.read().decode("utf-8")
+        # 라우트가 정적 파일보다 우선 ("/" 는 라우트 → index.html 아님)
+        with urllib.request.urlopen(base + "/") as r:
+            assert r.read().decode("utf-8") == "라우트 홈"
+        # 경로 이탈(../) → 404 (http.client 로 원본 경로 그대로 전송)
+        conn = http.client.HTTPConnection("127.0.0.1", 포트)
+        conn.request("GET", "/../" + urllib.parse.quote("비밀.txt"))   # ../ 는 그대로, 파일명만 인코딩
+        resp = conn.getresponse()
+        assert resp.status == 404
+        assert "극비자료" not in resp.read().decode("utf-8")   # 파일 내용 유출 없음 (404 본문은 경로만 되울림)
+        conn.close()
+        # 없는 파일 → 404
+        try:
+            urllib.request.urlopen(base + urllib.parse.quote("/없는파일.html"))
+            assert False, "404 가 나야 함"
+        except urllib.error.HTTPError as e:
+            assert e.code == 404
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        shutil.rmtree(d)
 
 
 if __name__ == '__main__':
