@@ -1065,6 +1065,65 @@ def test_정적서버():
         shutil.rmtree(d)
 
 
+def test_쿠키서버():
+    # 쿠키 — 요청["쿠키"] 파싱(퍼센트 디코딩), 응답 "쿠키설정" → Set-Cookie(Path=/; HttpOnly, 인코딩) 왕복
+    import threading
+    import http.client
+    import urllib.parse
+
+    src = (
+        '함수 방문(요청) {\n'
+        '    횟수 = 숫자(값얻기(요청["쿠키"], "방문", "0")) + 1\n'
+        '    반환 {"본문": "방문=" + 횟수, "쿠키설정": {"방문": "" + 횟수, "이름": "철수"}}\n'
+        '}\n'
+        '함수 보기(요청) { 반환 "이름=" + 값얻기(요청["쿠키"], "이름", "(없음)") }\n'
+        '라우트 = {"/방문": 방문, "/보기": 보기}\n'
+    )
+    interp = 실행소스(src, out=io.StringIO())
+    httpd = _웹서버만들기(interp, 0, interp.g.vars['라우트'])
+    포트 = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        방문경로 = urllib.parse.quote("/방문")
+        # 1차 요청: 쿠키 없음 → 방문=1, Set-Cookie 발행(한글 이름·값은 퍼센트 인코딩, Path=/; HttpOnly)
+        conn = http.client.HTTPConnection("127.0.0.1", 포트)
+        conn.request("GET", 방문경로)
+        resp = conn.getresponse()
+        assert resp.status == 200
+        assert resp.read().decode("utf-8") == "방문=1"
+        쿠키들 = [v for k, v in resp.getheaders() if k.lower() == "set-cookie"]
+        conn.close()
+        assert len(쿠키들) == 2
+        방문쿠키 = [c for c in 쿠키들 if c.startswith(urllib.parse.quote("방문", safe='') + "=")][0]
+        assert 방문쿠키 == urllib.parse.quote("방문", safe='') + "=1; Path=/; HttpOnly"
+        이름쿠키 = [c for c in 쿠키들 if c.startswith(urllib.parse.quote("이름", safe='') + "=")][0]
+        assert urllib.parse.quote("철수", safe='') in 이름쿠키       # 값도 퍼센트 인코딩
+        # 2차 요청: 받은 쿠키를 되돌려보냄 → 방문=2 (왕복)
+        보낼쿠키 = "; ".join(c.split(";")[0] for c in 쿠키들)
+        conn = http.client.HTTPConnection("127.0.0.1", 포트)
+        conn.request("GET", 방문경로, headers={"Cookie": 보낼쿠키})
+        resp = conn.getresponse()
+        assert resp.read().decode("utf-8") == "방문=2"
+        conn.close()
+        # 한글 값 쿠키가 디코딩되어 요청["쿠키"] 로 들어오는지
+        conn = http.client.HTTPConnection("127.0.0.1", 포트)
+        conn.request("GET", urllib.parse.quote("/보기"), headers={"Cookie": 보낼쿠키})
+        resp = conn.getresponse()
+        assert resp.read().decode("utf-8") == "이름=철수"
+        conn.close()
+        # 문자열 반환 라우트는 Set-Cookie 없이 그대로 (기존 동작 불변)
+        conn = http.client.HTTPConnection("127.0.0.1", 포트)
+        conn.request("GET", urllib.parse.quote("/보기"))
+        resp = conn.getresponse()
+        assert resp.read().decode("utf-8") == "이름=(없음)"
+        assert not [v for k, v in resp.getheaders() if k.lower() == "set-cookie"]
+        conn.close()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

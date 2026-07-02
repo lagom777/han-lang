@@ -1336,8 +1336,9 @@ def _차집합(interp, args):         # 차집합(가, 나) → 가에 있고 �
 
 def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
     """포트·라우트(경로 문자열 → 가나다 함수)로 HTTPServer 를 구성해 돌려준다(아직 serve 안 함).
-    핸들러는 요청 사전 {메서드,경로,질의,본문} 하나를 받아, 문자열(→200 text/html) 또는
-    사전 {상태,헤더,본문} 을 반환한다. 없는 경로는 404. 테스트·서버 빌트인이 공유.
+    핸들러는 요청 사전 {메서드,경로,질의,본문,쿠키} 하나를 받아, 문자열(→200 text/html) 또는
+    사전 {상태,헤더,본문[,쿠키설정]} 을 반환한다. 없는 경로는 404. 테스트·서버 빌트인이 공유.
+    쿠키설정 {이름:값} 은 각각 Set-Cookie(Path=/; HttpOnly, 퍼센트 인코딩)로 나간다.
     정적폴더를 주면 라우트에 없는 경로는 그 폴더의 파일로 서빙(라우트가 우선)."""
     import http.server
     import urllib.parse
@@ -1350,11 +1351,16 @@ def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
               '.txt': 'text/plain; charset=utf-8'}
 
     class _핸들러(http.server.BaseHTTPRequestHandler):
-        def _응답(self, 상태, 헤더, 본문):
+        def _응답(self, 상태, 헤더, 본문, 쿠키설정=None):
             데이터 = 본문 if isinstance(본문, bytes) else 문자열화(본문).encode('utf-8')
             self.send_response(int(상태))
             for k, v in 헤더.items():
                 self.send_header(문자열화(k), 문자열화(v))
+            if isinstance(쿠키설정, dict):
+                for k, v in 쿠키설정.items():        # 이름·값 퍼센트 인코딩(한글 안전)
+                    self.send_header('Set-Cookie', urllib.parse.quote(문자열화(k), safe='')
+                                     + '=' + urllib.parse.quote(문자열화(v), safe='')
+                                     + '; Path=/; HttpOnly')
             self.send_header('Content-Length', str(len(데이터)))
             self.end_headers()
             self.wfile.write(데이터)
@@ -1365,7 +1371,12 @@ def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
             질의 = {k: v[0] for k, v in urllib.parse.parse_qs(parts.query).items()}
             길이 = int(self.headers.get('Content-Length') or 0)
             본문 = self.rfile.read(길이).decode('utf-8') if 길이 else ''
-            요청 = {'메서드': self.command, '경로': 경로, '질의': 질의, '본문': 본문}
+            쿠키 = {}
+            for 쌍 in (self.headers.get('Cookie') or '').split(';'):
+                이름, _, 값 = 쌍.strip().partition('=')
+                if 이름:
+                    쿠키[urllib.parse.unquote(이름)] = urllib.parse.unquote(값)
+            요청 = {'메서드': self.command, '경로': 경로, '질의': 질의, '본문': 본문, '쿠키': 쿠키}
             fn = 라우트.get(경로)
             if fn is None:
                 if 정적폴더 is not None:
@@ -1379,7 +1390,7 @@ def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
                 self._응답(500, 기본헤더, '500 서버 오류: ' + str(e))
                 return
             if isinstance(결과, dict):
-                self._응답(결과.get('상태', 200), 결과.get('헤더') or 기본헤더, 결과.get('본문', ''))
+                self._응답(결과.get('상태', 200), 결과.get('헤더') or 기본헤더, 결과.get('본문', ''), 결과.get('쿠키설정'))
             else:
                 self._응답(200, 기본헤더, 결과)
 
