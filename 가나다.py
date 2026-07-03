@@ -1181,6 +1181,12 @@ def _최소기준(interp, args):       # 최소기준(목록, 키함수) → 키
 
 
 def _찾기(interp, args):           # 찾기(목록, 함수) → 함수가 참인 첫 원소, 없으면 없음 (find)
+    if args and isinstance(args[0], 저장소핸들):   # 찾기(저장소, 조건사전) → 조건 키=값 전부 일치하는 기록 목록
+        조건 = args[1] if len(args) > 1 else {}
+        if not isinstance(조건, dict):
+            raise HanError('찾기: 저장소 검색 조건은 사전이어야 합니다 — 찾기(저장소, {"키": 값})')
+        return [d for d in _저장소_전부(args[0])
+                if all(k in d and d[k] == v for k, v in 조건.items())]
     for x in args[0]:
         if 참인가(interp.apply_func(args[1], [x])):
             return x
@@ -1192,6 +1198,8 @@ def _있나(interp, args):           # 있나(목록, 함수) → 하나라도 �
 
 
 def _모두(interp, args):           # 모두(목록, 함수) → 전부 참이면 참 (all)
+    if args and isinstance(args[0], 저장소핸들):   # 모두(저장소) → 모든 기록 목록(각 사전에 "번호")
+        return _저장소_전부(args[0])
     return all(참인가(interp.apply_func(args[1], [x])) for x in args[0])
 
 
@@ -1487,6 +1495,144 @@ def _자료닫기(interp, args):       # 자료닫기(핸들) → 없음. 다 �
     return None
 
 
+# ------------------------------------------------------------ 한 몸 풀스택 ① 저장소 (SQL 숨김)
+class 저장소핸들:
+    """저장소() 가 돌려주는 값 — SQLite 연결 + 표 이름. SQL 없이 넣기/모두/찾기/고치기/빼기로 쓴다."""
+    __slots__ = ('연결', '이름')
+
+    def __init__(self, 연결, 이름):
+        self.연결, self.이름 = 연결, 이름
+
+    def __repr__(self):
+        return f"<저장소 {self.이름}>"
+
+
+def _저장소검증(이름, v):
+    if not isinstance(v, 저장소핸들):
+        raise HanError(f"{이름}: 첫 인자는 저장소() 가 돌려준 저장소여야 합니다")
+    return v
+
+
+def _저장소(interp, args):         # 저장소(경로, 이름) → 저장소. 파일(":memory:" 는 메모리 전용)에 이름 표를 만들어(없으면) 연다
+    if len(args) < 2:
+        raise HanError('저장소: 저장소(경로, 이름) — 파일 경로와 저장소 이름 둘 다 필요합니다')
+    이름 = 문자열화(args[1])
+    if not 이름.isidentifier():
+        raise HanError(f"저장소: 이름은 한글·영문·숫자·_ 로 된 한 단어여야 합니다 — '{이름}'")
+    연결 = _자료열기(interp, [args[0]])   # 자료열기 내부 재사용(오류 안내·다른 스레드 허용 포함)
+    연결.execute(f'CREATE TABLE IF NOT EXISTS "{이름}" (id INTEGER PRIMARY KEY AUTOINCREMENT, 자료 TEXT)')
+    연결.commit()
+    return 저장소핸들(연결, 이름)
+
+
+def _넣기(interp, args):           # 넣기(저장소, 사전) → 번호. 사전을 통째로 저장(한글 키·값 그대로)
+    저장 = _저장소검증('넣기', args[0])
+    사전 = args[1] if len(args) > 1 else None
+    if not isinstance(사전, dict):
+        raise HanError('넣기: 두 번째 인자는 사전이어야 합니다 — 넣기(저장소, {"키": 값})')
+    기록 = {k: v for k, v in 사전.items() if k != '번호'}   # 번호는 저장소가 매긴다
+    cur = 저장.연결.execute(f'INSERT INTO "{저장.이름}" (자료) VALUES (?)',
+                          [_json.dumps(기록, ensure_ascii=False)])
+    저장.연결.commit()
+    return cur.lastrowid
+
+
+def _저장소_전부(저장):            # 내부 공용 — 모든 기록을 [사전] 으로 (각 사전에 "번호" 부여, 번호 순)
+    rows = 저장.연결.execute(f'SELECT id, 자료 FROM "{저장.이름}" ORDER BY id').fetchall()
+    out = []
+    for r in rows:
+        d = _json.loads(r['자료'])
+        d['번호'] = r['id']
+        out.append(d)
+    return out
+
+
+def _고치기(interp, args):         # 고치기(저장소, 번호, 사전) → 성공여부. 기록에 사전의 키들만 덮어씀(부분 수정)
+    저장 = _저장소검증('고치기', args[0])
+    if len(args) < 3 or not isinstance(args[2], dict):
+        raise HanError('고치기: 고치기(저장소, 번호, 사전) — 번호와 고칠 내용 사전이 필요합니다')
+    번호 = int(args[1])
+    row = 저장.연결.execute(f'SELECT 자료 FROM "{저장.이름}" WHERE id = ?', [번호]).fetchone()
+    if row is None:
+        return False
+    d = _json.loads(row['자료'])
+    d.update(args[2])
+    d.pop('번호', None)             # 번호는 저장 안 함(id 가 원본)
+    저장.연결.execute(f'UPDATE "{저장.이름}" SET 자료 = ? WHERE id = ?',
+                    [_json.dumps(d, ensure_ascii=False), 번호])
+    저장.연결.commit()
+    return True
+
+
+def _빼기(interp, args):           # 빼기(저장소, 번호) → 성공여부. 그 번호 기록 삭제
+    저장 = _저장소검증('빼기', args[0])
+    if len(args) < 2:
+        raise HanError('빼기: 빼기(저장소, 번호) — 지울 기록의 번호가 필요합니다')
+    cur = 저장.연결.execute(f'DELETE FROM "{저장.이름}" WHERE id = ?', [int(args[1])])
+    저장.연결.commit()
+    return cur.rowcount > 0
+
+
+# ------------------------------------------------------------ 한 몸 풀스택 ② HTML 도우미 (HTML 숨김)
+class HTML조각(str):
+    """문서·글·목록·연결·입력폼이 돌려주는 완성된 HTML — 문서에 넣을 때 이스케이프를 통과한다.
+    일반 문자열은 항상 이스케이프되므로 사용자 입력을 그대로 넣어도 안전(XSS 차단)."""
+    __slots__ = ()
+
+
+def _HTML이스케이프(v):            # 일반 값 → HTML 안전 문자열, HTML조각은 그대로 통과
+    if isinstance(v, HTML조각):
+        return str(v)
+    s = 문자열화(v)
+    return (s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+             .replace('"', '&quot;').replace("'", '&#39;'))
+
+
+_문서스타일 = ('body{font-family:sans-serif;max-width:40em;margin:2em auto;padding:0 1em;line-height:1.6}'
+              'input,button{font:inherit;padding:.3em .6em;margin:.2em 0}'
+              'button{cursor:pointer}ul{padding-left:1.2em}')
+
+
+def _문서(interp, args):           # 문서(제목, ...본문조각) → 완성된 HTML 페이지(UTF-8·기본 스타일). 조각은 글/목록/연결/입력폼 결과나 문자열
+    제목 = _HTML이스케이프(args[0] if args else '')
+    본문 = '\n'.join(_HTML이스케이프(a) for a in args[1:])
+    return HTML조각('<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">'
+                   '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                   f'<title>{제목}</title><style>{_문서스타일}</style></head>'
+                   f'<body>\n{본문}\n</body></html>')
+
+
+def _글(interp, args):             # 글(텍스트[, 크기]) → 문단(<p>). 크기 1~3 이면 제목(<h1>~<h3>)
+    텍스트 = _HTML이스케이프(args[0] if args else '')
+    크기 = int(args[1]) if len(args) > 1 else 0
+    태그 = f'h{크기}' if 크기 in (1, 2, 3) else 'p'
+    return HTML조각(f'<{태그}>{텍스트}</{태그}>')
+
+
+def _목록태그(interp, args):       # 목록(문자열목록) → 점 목록(<ul>). 각 항목 이스케이프(조각은 그대로)
+    항목들 = args[0] if args else []
+    if not isinstance(항목들, list):
+        raise HanError('목록: 인자는 목록이어야 합니다 — 목록(["가", "나"])')
+    return HTML조각('<ul>' + ''.join('<li>' + _HTML이스케이프(x) + '</li>' for x in 항목들) + '</ul>')
+
+
+def _연결(interp, args):           # 연결(주소, 텍스트) → 링크(<a>)
+    주소 = _HTML이스케이프(args[0] if args else '')
+    텍스트 = _HTML이스케이프(args[1] if len(args) > 1 else (args[0] if args else ''))
+    return HTML조각(f'<a href="{주소}">{텍스트}</a>')
+
+
+def _입력폼(interp, args):         # 입력폼(주소, 필드이름목록[, 버튼텍스트]) → 입력 폼. 보내면 주소로 GET → 요청["질의"] 에 {필드:값}
+    주소 = _HTML이스케이프(args[0] if args else '')
+    필드들 = args[1] if len(args) > 1 else []
+    if not isinstance(필드들, list):
+        raise HanError('입력폼: 필드이름목록은 목록이어야 합니다 — 입력폼("/등록", ["이름", "내용"])')
+    버튼 = _HTML이스케이프(args[2] if len(args) > 2 else '보내기')
+    칸들 = ''.join(f'<label>{_HTML이스케이프(f)} <input name="{_HTML이스케이프(f)}"></label><br>'
+                  for f in 필드들)
+    return HTML조각(f'<form action="{주소}" method="get">{칸들}<button>{버튼}</button></form>')
+
+
 BUILTINS = {
     '출력': _출력,
     '길이': _길이,
@@ -1593,6 +1739,15 @@ BUILTINS = {
     '실행': _실행,
     '질의': _질의,
     '자료닫기': _자료닫기,
+    '저장소': _저장소,
+    '넣기': _넣기,
+    '고치기': _고치기,
+    '빼기': _빼기,
+    '문서': _문서,
+    '글': _글,
+    '목록': _목록태그,
+    '연결': _연결,
+    '입력폼': _입력폼,
 }
 
 

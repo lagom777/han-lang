@@ -948,9 +948,9 @@ def test_all_examples_run():
     import glob
     os.environ.pop('OPENROUTER_API_KEY', None)   # ai.가나다 → 안내 stub 경로
     exdir = os.path.join(ROOT, 'examples')
-    # 웹.가나다·정적웹.가나다 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버/test_정적서버 가 따로 검증
+    # 웹.가나다·정적웹.가나다·한몸.가나다 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버/test_정적서버/test_한몸_통합 이 따로 검증
     paths = [p for p in sorted(glob.glob(os.path.join(exdir, '*.가나다')))
-             if os.path.basename(p) not in ('웹.가나다', '정적웹.가나다')]
+             if os.path.basename(p) not in ('웹.가나다', '정적웹.가나다', '한몸.가나다')]
     assert len(paths) >= 10
     old = sys.stdin
     try:
@@ -1201,6 +1201,153 @@ def test_자료_핸들검증():
         '시도 { 자료닫기([1]) } 잡기(오류) { 출력(포함(오류, "핸들")) }\n'
     )
     assert run(src) == "참\n참\n참\n"
+
+
+def test_저장소_왕복():
+    # 저장소(경로, 이름) — SQL 없이 넣기→모두 왕복(한글 키·값 그대로), 다시 열어도 유지(파일·자동 커밋)
+    import tempfile
+    import shutil
+    d = tempfile.mkdtemp()
+    경로 = os.path.join(d, "한몸.db")
+    try:
+        out = run(
+            '방명록 = 저장소("' + 경로 + '", "글들")\n'
+            '번호 = 넣기(방명록, {"이름": "철수", "내용": "안녕하세요"})\n'
+            '출력(번호)\n'
+            '출력(넣기(방명록, {"이름": "영희", "내용": "반가워요"}))\n'
+            '글들 = 모두(방명록)\n'
+            '출력(길이(글들))\n'
+            '출력(글들[0]["이름"] + ": " + 글들[0]["내용"])\n'
+            '출력(글들[1]["번호"])\n'                               # 모두() 가 기록마다 "번호" 부여
+        )
+        assert out == "1\n2\n2\n철수: 안녕하세요\n2\n"
+        # 새로 열어도 데이터 유지
+        assert run('출력(길이(모두(저장소("' + 경로 + '", "글들"))))') == "2\n"
+    finally:
+        shutil.rmtree(d)
+
+
+def test_저장소_찾기():
+    # 찾기(저장소, 조건사전) — 키=값 전부 일치(여러 키는 AND), 없으면 빈 목록. 기존 목록 찾기(find)는 그대로
+    src = (
+        '창고 = 저장소(":memory:", "물건")\n'
+        '넣기(창고, {"이름": "사과", "색": "빨강", "개수": 3})\n'
+        '넣기(창고, {"이름": "바나나", "색": "노랑", "개수": 5})\n'
+        '넣기(창고, {"이름": "체리", "색": "빨강", "개수": 3})\n'
+        '빨강들 = 찾기(창고, {"색": "빨강"})\n'
+        '출력(길이(빨강들))\n'
+        '출력(빨강들[1]["이름"])\n'
+        '출력(길이(찾기(창고, {"색": "빨강", "개수": 3})))\n'      # 여러 키 AND
+        '출력(찾기(창고, {"색": "파랑"}))\n'                        # 매치 없음 → 빈 목록
+        '출력(찾기([1, 3, 4], 람다(x) { 반환 x % 2 == 0 }))\n'      # 목록 찾기(find) 하위호환
+    )
+    assert run(src) == "2\n체리\n2\n[]\n4\n"
+
+
+def test_저장소_고치기_빼기():
+    # 고치기 — 그 번호 기록에 사전의 키들만 덮어씀(부분 수정). 빼기 — 삭제. 둘 다 성공여부 반환
+    src = (
+        '방명록 = 저장소(":memory:", "글들")\n'
+        '번호 = 넣기(방명록, {"이름": "철수", "내용": "처음"})\n'
+        '출력(고치기(방명록, 번호, {"내용": "고침"}))\n'
+        '출력(모두(방명록)[0]["이름"] + ": " + 모두(방명록)[0]["내용"])\n'   # 안 고친 키(이름)는 유지
+        '출력(고치기(방명록, 999, {"내용": "x"}))\n'                          # 없는 번호 → 거짓
+        '출력(빼기(방명록, 번호))\n'
+        '출력(길이(모두(방명록)))\n'
+        '출력(빼기(방명록, 번호))\n'                                          # 이미 없음 → 거짓
+    )
+    assert run(src) == "참\n철수: 고침\n거짓\n참\n0\n거짓\n"
+
+
+def test_저장소_검증오류():
+    # 저장소 아닌 값·이상한 이름·사전 아닌 기록은 친절한 오류(시도/잡기로 잡힘)
+    src = (
+        '시도 { 넣기(123, {"가": 1}) } 잡기(오류) { 출력(포함(오류, "저장소")) }\n'
+        '시도 { 저장소(":memory:", "이상한 이름!") } 잡기(오류) { 출력(포함(오류, "이름")) }\n'
+        '창고 = 저장소(":memory:", "물건")\n'
+        '시도 { 넣기(창고, [1, 2]) } 잡기(오류) { 출력(포함(오류, "사전")) }\n'
+    )
+    assert run(src) == "참\n참\n참\n"
+
+
+def test_HTML_이스케이프():
+    # 글·목록·문서 — 사용자 텍스트의 태그는 이스케이프(XSS 차단), 완성 조각(글 결과 등)은 그대로 통과
+    assert run('출력(글("<script>alert(1)</script>"))') == "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n"
+    assert run('출력(글("큰제목", 1))') == "<h1>큰제목</h1>\n"
+    assert run('출력(글("소제목", 2))') == "<h2>소제목</h2>\n"
+    assert run('출력(목록(["<b>안녕</b>", "가"]))') == "<ul><li>&lt;b&gt;안녕&lt;/b&gt;</li><li>가</li></ul>\n"
+    out = run('출력(문서("제목<x>", 글("본문"), "생<i>글자"))')
+    assert out.startswith("<!DOCTYPE html>")
+    assert 'charset="utf-8"' in out
+    assert "<title>제목&lt;x&gt;</title>" in out       # 제목도 이스케이프
+    assert "<p>본문</p>" in out                        # 글() 조각은 태그 그대로 통과
+    assert "생&lt;i&gt;글자" in out                    # 일반 문자열은 이스케이프
+    assert "<i>" not in out
+
+
+def test_연결_입력폼():
+    # 연결 — <a>, 입력폼 — GET <form>. 주소·라벨·버튼 모두 이스케이프
+    assert run('출력(연결("/목록", "돌아가기"))') == '<a href="/목록">돌아가기</a>\n'
+    assert run('출력(연결("/a?x=1&y=2", "<보기>"))') == '<a href="/a?x=1&amp;y=2">&lt;보기&gt;</a>\n'
+    out = run('출력(입력폼("/등록", ["이름", "내용"], "남기기"))')
+    assert out == ('<form action="/등록" method="get">'
+                   '<label>이름 <input name="이름"></label><br>'
+                   '<label>내용 <input name="내용"></label><br>'
+                   '<button>남기기</button></form>\n')
+    assert '<button>보내기</button>' in run('출력(입력폼("/등록", ["이름"]))')   # 기본 버튼 텍스트
+
+
+def test_한몸_통합():
+    # 한 몸 풀스택(examples/한몸.가나다 스타일) — 임시 저장소 + 서버 기동, 등록→목록 HTTP 왕복
+    import threading
+    import tempfile
+    import shutil
+    import urllib.request
+    import urllib.parse
+
+    d = tempfile.mkdtemp()
+    경로 = os.path.join(d, "방명록.db")
+    src = (
+        '방명록 = 저장소("' + 경로 + '", "글들")\n'
+        '함수 첫화면(요청) {\n'
+        '    글들 = 모두(방명록)\n'
+        '    줄들 = []\n'
+        '    반복 항목 를 글들 에서 { 추가(줄들, 항목["이름"] + ": " + 항목["내용"]) }\n'
+        '    반환 문서("방명록", 글("방명록", 1), 목록(줄들), 입력폼("/등록", ["이름", "내용"], "남기기"))\n'
+        '}\n'
+        '함수 등록(요청) {\n'
+        '    넣기(방명록, {"이름": 값얻기(요청["질의"], "이름", "익명"), "내용": 값얻기(요청["질의"], "내용", "")})\n'
+        '    반환 문서("등록 완료", 글("등록 완료!"), 연결("/", "돌아가기"))\n'
+        '}\n'
+        '라우트 = {"/": 첫화면, "/등록": 등록}\n'
+    )
+    interp = 실행소스(src, out=io.StringIO())
+    httpd = _웹서버만들기(interp, 0, interp.g.vars['라우트'])
+    포트 = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f"http://127.0.0.1:{포트}"
+        # 빈 방명록 — 완성된 HTML 페이지 + 입력 폼
+        with urllib.request.urlopen(base + "/") as r:
+            처음 = r.read().decode("utf-8")
+        assert 처음.startswith("<!DOCTYPE html>")
+        assert "<h1>방명록</h1>" in 처음 and '<form action="/등록" method="get"' in 처음
+        assert "철수" not in 처음
+        # 등록(브라우저 폼 GET 과 동일) → 안내 페이지
+        url = (base + urllib.parse.quote("/등록") + "?"
+               + urllib.parse.urlencode({"이름": "철수", "내용": "<b>안녕</b> 한몸!"}))
+        with urllib.request.urlopen(url) as r:
+            assert "등록 완료" in r.read().decode("utf-8")
+        # 목록 화면에 반영 + 사용자 입력 이스케이프(XSS 차단)
+        with urllib.request.urlopen(base + "/") as r:
+            화면 = r.read().decode("utf-8")
+        assert "<li>철수: &lt;b&gt;안녕&lt;/b&gt; 한몸!</li>" in 화면
+        assert "<b>안녕</b>" not in 화면
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        shutil.rmtree(d)
 
 
 if __name__ == '__main__':
