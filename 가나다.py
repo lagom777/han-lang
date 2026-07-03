@@ -6,7 +6,7 @@
 파이썬으로 트랜스파일하지 않는다(구현 호스트가 파이썬일 뿐, 언어는 독립적이다).
 
 사용법:
-  python3 가나다.py 실행 프로그램.가나다      # 파일 실행
+  python3 가나다.py 실행 프로그램.ㄱㄴㄷ      # 파일 실행
   python3 가나다.py            # 대화형(REPL)
 """
 import sys
@@ -1920,7 +1920,7 @@ def main(argv):
             except (HanError, Return) as e:
                 print(f"오류: {e}")
     else:
-        print("사용법: python3 가나다.py 실행 <파일.가나다>  |  python3 가나다.py 대화", file=sys.stderr)
+        print("사용법: python3 가나다.py 실행 <파일.ㄱㄴㄷ>  |  python3 가나다.py 대화", file=sys.stderr)
         sys.exit(2)
 
 

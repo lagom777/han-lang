@@ -292,8 +292,8 @@ def test_error_shows_column_caret():
 
 
 def test_module_import():
-    # 다른 .가나다 파일의 함수/변수를 가져와 사용
-    out = run('가져오기 "examples/lib.가나다"\n출력(곱하기(6, 7))\n출력(제곱(5))')
+    # 다른 .ㄱㄴㄷ 파일의 함수/변수를 가져와 사용
+    out = run('가져오기 "examples/lib.ㄱㄴㄷ"\n출력(곱하기(6, 7))\n출력(제곱(5))')
     assert out == "42\n25\n"
 
 
@@ -920,7 +920,7 @@ def test_slice():
 
 def test_flagship_example():
     # 종합 예제 — 전 toolkit 결합(판매 분석)이 기대 출력을 낸다
-    with open(os.path.join(ROOT, "examples", "flagship.가나다"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "examples", "flagship.ㄱㄴㄷ"), encoding="utf-8") as f:
         src = f.read()
     out = io.StringIO()
     실행소스(src, out=out, base_dir=os.path.join(ROOT, "examples"))
@@ -933,7 +933,7 @@ def test_flagship_example():
 
 def test_flagship_pipeline_example():
     # 실전 파이프라인 — 파일 I/O + JSON + toolkit 결합(쓰기→읽기→분석→쓰기→읽기)
-    with open(os.path.join(ROOT, "examples", "flagship_pipeline.가나다"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "examples", "flagship_pipeline.ㄱㄴㄷ"), encoding="utf-8") as f:
         src = f.read()
     out = io.StringIO()
     실행소스(src, out=out, base_dir=os.path.join(ROOT, "examples"))
@@ -944,18 +944,18 @@ def test_flagship_pipeline_example():
 
 
 def test_all_examples_run():
-    # 모든 examples/*.가나다 가 오류 없이 실행되는지(회귀 방지)
+    # 모든 examples/*.ㄱㄴㄷ 가 오류 없이 실행되는지(회귀 방지)
     import glob
-    os.environ.pop('OPENROUTER_API_KEY', None)   # ai.가나다 → 안내 stub 경로
+    os.environ.pop('OPENROUTER_API_KEY', None)   # ai.ㄱㄴㄷ → 안내 stub 경로
     exdir = os.path.join(ROOT, 'examples')
-    # 웹.가나다·정적웹.가나다·한몸.가나다 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버/test_정적서버/test_한몸_통합 이 따로 검증
-    paths = [p for p in sorted(glob.glob(os.path.join(exdir, '*.가나다')))
-             if os.path.basename(p) not in ('웹.가나다', '정적웹.가나다', '한몸.가나다')]
+    # 웹.ㄱㄴㄷ·정적웹.ㄱㄴㄷ·한몸.ㄱㄴㄷ 는 서버(블로킹)로 계속 돌기 때문에 제외 — test_서버/test_정적서버/test_한몸_통합 이 따로 검증
+    paths = [p for p in sorted(glob.glob(os.path.join(exdir, '*.ㄱㄴㄷ')))
+             if os.path.basename(p) not in ('웹.ㄱㄴㄷ', '정적웹.ㄱㄴㄷ', '한몸.ㄱㄴㄷ')]
     assert len(paths) >= 10
     old = sys.stdin
     try:
         for path in paths:
-            sys.stdin = io.StringIO("홍길동\n30\n40\n50\n")  # input.가나다 용
+            sys.stdin = io.StringIO("홍길동\n30\n40\n50\n")  # input.ㄱㄴㄷ 용
             with open(path, encoding='utf-8') as f:
                 src = f.read()
             try:
@@ -1298,7 +1298,7 @@ def test_연결_입력폼():
 
 
 def test_한몸_통합():
-    # 한 몸 풀스택(examples/한몸.가나다 스타일) — 임시 저장소 + 서버 기동, 등록→목록 HTTP 왕복
+    # 한 몸 풀스택(examples/한몸.ㄱㄴㄷ 스타일) — 임시 저장소 + 서버 기동, 등록→목록 HTTP 왕복
     import threading
     import tempfile
     import shutil
@@ -1352,7 +1352,7 @@ def test_한몸_통합():
 
 def test_모듈_사전반환():
     # 모듈(경로) → 네임스페이스 사전 — 함수 호출·변수 접근 모두 ["키"] 로
-    out = run('수학 = 모듈("examples/lib.가나다")\n'
+    out = run('수학 = 모듈("examples/lib.ㄱㄴㄷ")\n'
               '출력(수학["제곱"](5))\n'
               '출력(수학["곱하기"](6, 7))\n'
               '출력(수학["원주율"])')
@@ -1362,12 +1362,12 @@ def test_모듈_사전반환():
 def test_모듈_격리_vs_가져오기():
     # 모듈() 은 격리 — 모듈 안 이름이 호출측 env 를 오염하지 않음(플랫 가져오기와 대비)
     try:
-        run('모듈("examples/lib.가나다")\n출력(원주율)')
+        run('모듈("examples/lib.ㄱㄴㄷ")\n출력(원주율)')
         assert False, "이름 오류가 나야 함"
     except Exception as e:
         assert "'원주율'" in str(e) and "정의되지 않았습니다" in str(e)
     # 같은 파일을 가져오기(플랫)로 부르면 이름이 그대로 들어옴 — 대비 확인
-    assert run('가져오기 "examples/lib.가나다"\n출력(원주율)') == "3.14159\n"
+    assert run('가져오기 "examples/lib.ㄱㄴㄷ"\n출력(원주율)') == "3.14159\n"
 
 
 def test_모듈_캐시_상태공유():
@@ -1375,7 +1375,7 @@ def test_모듈_캐시_상태공유():
     import tempfile
     import shutil
     d = tempfile.mkdtemp()
-    p = os.path.join(d, "세기.가나다")
+    p = os.path.join(d, "세기.ㄱㄴㄷ")
     with open(p, "w", encoding="utf-8") as f:
         f.write('카운터 = 0\n함수 증가() { 카운터 += 1\n반환 카운터 }\n')
     try:
@@ -1394,7 +1394,7 @@ def test_모듈_오류_경로표면화():
     import tempfile
     import shutil
     d = tempfile.mkdtemp()
-    p = os.path.join(d, "고장.가나다")
+    p = os.path.join(d, "고장.ㄱㄴㄷ")
     with open(p, "w", encoding="utf-8") as f:
         f.write('출력(1)\n발생("펑")\n')
     try:
@@ -1402,15 +1402,15 @@ def test_모듈_오류_경로표면화():
             run('모듈("' + p + '")')
             assert False, "모듈 오류가 나야 함"
         except Exception as e:
-            assert "모듈" in str(e) and "고장.가나다" in str(e) and "펑" in str(e)
-        out = run('시도 { 모듈("없는폴더/없는모듈.가나다") } 잡기(오류) { 출력(오류) }')
-        assert "모듈을 불러올 수 없습니다" in out and "없는모듈.가나다" in out
+            assert "모듈" in str(e) and "고장.ㄱㄴㄷ" in str(e) and "펑" in str(e)
+        out = run('시도 { 모듈("없는폴더/없는모듈.ㄱㄴㄷ") } 잡기(오류) { 출력(오류) }')
+        assert "모듈을 불러올 수 없습니다" in out and "없는모듈.ㄱㄴㄷ" in out
     finally:
         shutil.rmtree(d)
 
 
 def test_방명록앱_멀티파일_통합():
-    # 멀티파일 앱(examples/방명록앱/) — 진짜 앱.가나다 부팅(환경변수로 포트 0·임시 자료경로 주입) 후
+    # 멀티파일 앱(examples/방명록앱/) — 진짜 앱.ㄱㄴㄷ 부팅(환경변수로 포트 0·임시 자료경로 주입) 후
     # HTTP 등록→목록 왕복. 자료/화면/앱 세 파일이 모듈() 로 엮여 실제로 동작하는지 검증
     import threading
     import tempfile
@@ -1424,7 +1424,7 @@ def test_방명록앱_멀티파일_통합():
     os.environ['포트'] = '0'                       # 임의 포트(hermetic)
     os.environ['자료경로'] = os.path.join(d, '방명록.db')
     앱폴더 = os.path.join(ROOT, 'examples', '방명록앱')
-    with open(os.path.join(앱폴더, '앱.가나다'), encoding='utf-8') as f:
+    with open(os.path.join(앱폴더, '앱.ㄱㄴㄷ'), encoding='utf-8') as f:
         src = f.read()
     buf = io.StringIO()
     t = threading.Thread(target=실행소스, args=(src,),
