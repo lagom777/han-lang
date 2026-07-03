@@ -1350,6 +1350,112 @@ def test_한몸_통합():
         shutil.rmtree(d)
 
 
+def test_모듈_사전반환():
+    # 모듈(경로) → 네임스페이스 사전 — 함수 호출·변수 접근 모두 ["키"] 로
+    out = run('수학 = 모듈("examples/lib.가나다")\n'
+              '출력(수학["제곱"](5))\n'
+              '출력(수학["곱하기"](6, 7))\n'
+              '출력(수학["원주율"])')
+    assert out == "25\n42\n3.14159\n"
+
+
+def test_모듈_격리_vs_가져오기():
+    # 모듈() 은 격리 — 모듈 안 이름이 호출측 env 를 오염하지 않음(플랫 가져오기와 대비)
+    try:
+        run('모듈("examples/lib.가나다")\n출력(원주율)')
+        assert False, "이름 오류가 나야 함"
+    except Exception as e:
+        assert "'원주율'" in str(e) and "정의되지 않았습니다" in str(e)
+    # 같은 파일을 가져오기(플랫)로 부르면 이름이 그대로 들어옴 — 대비 확인
+    assert run('가져오기 "examples/lib.가나다"\n출력(원주율)') == "3.14159\n"
+
+
+def test_모듈_캐시_상태공유():
+    # 같은 경로 2회 모듈() → 같은 사전(캐시) — 모듈 상태(카운터)가 공유됨
+    import tempfile
+    import shutil
+    d = tempfile.mkdtemp()
+    p = os.path.join(d, "세기.가나다")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write('카운터 = 0\n함수 증가() { 카운터 += 1\n반환 카운터 }\n')
+    try:
+        out = run('가 = 모듈("' + p + '")\n'
+                  '나 = 모듈("' + p + '")\n'
+                  '가["증가"]()\n'
+                  '출력(나["증가"]())\n'      # 같은 사전 → 카운터 이어짐
+                  '출력(가["카운터"])')       # 사전 값도 살아있는 모듈 상태
+        assert out == "2\n2\n"
+    finally:
+        shutil.rmtree(d)
+
+
+def test_모듈_오류_경로표면화():
+    # 모듈 안 오류 → 경로가 담긴 가나다 오류로 표면화 / 없는 파일도 친절한 오류
+    import tempfile
+    import shutil
+    d = tempfile.mkdtemp()
+    p = os.path.join(d, "고장.가나다")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write('출력(1)\n발생("펑")\n')
+    try:
+        try:
+            run('모듈("' + p + '")')
+            assert False, "모듈 오류가 나야 함"
+        except Exception as e:
+            assert "모듈" in str(e) and "고장.가나다" in str(e) and "펑" in str(e)
+        out = run('시도 { 모듈("없는폴더/없는모듈.가나다") } 잡기(오류) { 출력(오류) }')
+        assert "모듈을 불러올 수 없습니다" in out and "없는모듈.가나다" in out
+    finally:
+        shutil.rmtree(d)
+
+
+def test_방명록앱_멀티파일_통합():
+    # 멀티파일 앱(examples/방명록앱/) — 진짜 앱.가나다 부팅(환경변수로 포트 0·임시 자료경로 주입) 후
+    # HTTP 등록→목록 왕복. 자료/화면/앱 세 파일이 모듈() 로 엮여 실제로 동작하는지 검증
+    import threading
+    import tempfile
+    import shutil
+    import time
+    import re
+    import urllib.request
+    import urllib.parse
+
+    d = tempfile.mkdtemp()
+    os.environ['포트'] = '0'                       # 임의 포트(hermetic)
+    os.environ['자료경로'] = os.path.join(d, '방명록.db')
+    앱폴더 = os.path.join(ROOT, 'examples', '방명록앱')
+    with open(os.path.join(앱폴더, '앱.가나다'), encoding='utf-8') as f:
+        src = f.read()
+    buf = io.StringIO()
+    t = threading.Thread(target=실행소스, args=(src,),
+                         kwargs={'out': buf, 'base_dir': 앱폴더}, daemon=True)
+    t.start()
+    try:
+        포트 = None
+        for _ in range(200):                        # 서버()가 출력한 실제 포트 대기
+            m = re.search(r'localhost:(\d+)', buf.getvalue())
+            if m:
+                포트 = int(m.group(1))
+                break
+            time.sleep(0.05)
+        assert 포트, "서버가 포트를 출력하지 않음: " + buf.getvalue()
+        base = f"http://127.0.0.1:{포트}"
+        with urllib.request.urlopen(base + "/") as r:
+            처음 = r.read().decode("utf-8")
+        assert "<h1>방명록</h1>" in 처음 and "철수" not in 처음
+        url = (base + urllib.parse.quote("/등록") + "?"
+               + urllib.parse.urlencode({"이름": "철수", "내용": "여러 파일!"}))
+        with urllib.request.urlopen(url) as r:
+            assert "등록 완료" in r.read().decode("utf-8")
+        with urllib.request.urlopen(base + "/") as r:
+            화면 = r.read().decode("utf-8")
+        assert "철수: 여러 파일!" in 화면
+    finally:
+        os.environ.pop('포트', None)
+        os.environ.pop('자료경로', None)
+        shutil.rmtree(d)
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0

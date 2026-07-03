@@ -424,6 +424,7 @@ class Interp:
         self.cur_line = 0
         self.base_dir = '.'
         self.imported = set()
+        self.modules = {}               # 모듈() 캐시 — 경로별 네임스페이스 사전(인터프리터당 1회 실행)
 
     def run(self, ast):
         try:
@@ -1061,6 +1062,31 @@ def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → �
     return os.environ.get(name, args[1] if len(args) > 1 else None)
 
 
+def _모듈(interp, args):           # 모듈(경로) → 사전{이름:값}. 파일을 격리 환경에서 실행해 최상위 정의(함수·변수)를
+    # 네임스페이스 사전으로 반환(호출측 이름 오염 없음 — 플랫 가져오기와 대비). 경로는 가져오기처럼 현재 파일 기준.
+    # 같은 경로는 인터프리터당 1회만 실행하고 같은 사전을 돌려준다(캐시 → 상태 공유).
+    path = 문자열화(args[0])
+    full = os.path.normpath(os.path.join(interp.base_dir, path))
+    if full in interp.modules:
+        return interp.modules[full]
+    try:
+        with open(full, encoding='utf-8') as f:
+            src = f.read()
+    except OSError:
+        raise HanError(f"모듈을 불러올 수 없습니다: {path}")
+    env = Env()                                     # 격리 환경 — 전역과 부모 사슬 없음
+    prev_dir, prev_line = interp.base_dir, interp.cur_line
+    interp.base_dir = os.path.dirname(full) or '.'  # 모듈 안 상대경로는 모듈 기준
+    try:
+        interp.exec_block(Parser(lex(src)).parse(), env)
+    except HanError as e:
+        raise HanError(f"모듈 '{path}' 오류 — {e}") from None
+    finally:
+        interp.base_dir, interp.cur_line = prev_dir, prev_line
+    interp.modules[full] = env.vars                 # env.vars 그대로 = 모듈 함수의 클로저 환경(살아있는 상태)
+    return env.vars
+
+
 def _지금(interp, args):           # 지금() → 현재 유닉스 시각(초, 소수). 타임스탬프·경과 측정용
     import time
     return time.time()
@@ -1690,6 +1716,7 @@ BUILTINS = {
     '파일존재': _파일존재,
     '파일목록': _파일목록,
     '환경변수': _환경변수,
+    '모듈': _모듈,
     '지금': _지금,
     '키들': _키들,
     '값들': _값들,
