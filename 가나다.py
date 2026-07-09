@@ -978,6 +978,11 @@ def _글자인가(interp, args):        # 글자인가(문자열) → 모두 글
     return isinstance(s, str) and len(s) > 0 and s.isalpha()
 
 
+def _공백인가(interp, args):        # 공백인가(문자열) → 모두 공백(빈칸·탭·개행)이면 참(빈 문자열·비문자열 거짓). 빈칸 입력 검증
+    s = args[0] if args else None
+    return isinstance(s, str) and len(s) > 0 and s.isspace()
+
+
 def _타입(interp, args):           # 값의 타입 이름
     v = args[0]
     if v is True or v is False:
@@ -1755,6 +1760,7 @@ BUILTINS = {
     '끝': _끝,
     '숫자인가': _숫자인가,
     '글자인가': _글자인가,
+    '공백인가': _공백인가,
     '타입': _타입,
     '절댓값': _절댓값,
     '반올림': _반올림,
