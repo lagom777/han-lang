@@ -1396,9 +1396,14 @@ def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
                 self.send_header(문자열화(k), 문자열화(v))
             if isinstance(쿠키설정, dict):
                 for k, v in 쿠키설정.items():        # 이름·값 퍼센트 인코딩(한글 안전)
-                    self.send_header('Set-Cookie', urllib.parse.quote(문자열화(k), safe='')
-                                     + '=' + urllib.parse.quote(문자열화(v), safe='')
-                                     + '; Path=/; HttpOnly')
+                    만료 = None
+                    if isinstance(v, dict):          # {"값":..., "만료":초} → Max-Age (만료=0 이면 쿠키 삭제=로그아웃)
+                        만료, v = v.get('만료'), v.get('값', '')
+                    헤더값 = (urllib.parse.quote(문자열화(k), safe='')
+                             + '=' + urllib.parse.quote(문자열화(v), safe='') + '; Path=/; HttpOnly')
+                    if 만료 is not None:
+                        헤더값 += '; Max-Age=' + str(int(만료))
+                    self.send_header('Set-Cookie', 헤더값)
             self.send_header('Content-Length', str(len(데이터)))
             self.end_headers()
             self.wfile.write(데이터)

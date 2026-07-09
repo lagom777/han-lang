@@ -1131,6 +1131,41 @@ def test_쿠키서버():
         httpd.server_close()
 
 
+def test_쿠키_만료():
+    # 쿠키설정 값이 {값, 만료} 사전이면 Set-Cookie 에 Max-Age 부여(만료=0 이면 삭제=로그아웃). 문자열 값은 기존대로
+    import threading
+    import http.client
+    import urllib.parse
+
+    src = (
+        '함수 로그인(요청) { 반환 {"본문": "ok", "쿠키설정": {"세션": {"값": "abc", "만료": 3600}}} }\n'
+        '함수 로그아웃(요청) { 반환 {"본문": "bye", "쿠키설정": {"세션": {"값": "", "만료": 0}}} }\n'
+        '함수 그냥(요청) { 반환 {"본문": "x", "쿠키설정": {"세션": "abc"}} }\n'
+        '라우트 = {"/로그인": 로그인, "/로그아웃": 로그아웃, "/그냥": 그냥}\n'
+    )
+    interp = 실행소스(src, out=io.StringIO())
+    httpd = _웹서버만들기(interp, 0, interp.g.vars['라우트'])
+    포트 = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        def 쿠키(경로):
+            conn = http.client.HTTPConnection("127.0.0.1", 포트)
+            conn.request("GET", urllib.parse.quote(경로))
+            resp = conn.getresponse()
+            resp.read()
+            헤더 = [v for k, v in resp.getheaders() if k.lower() == "set-cookie"][0]
+            conn.close()
+            return 헤더
+        assert "Max-Age=3600" in 쿠키("/로그인")       # 지속 세션
+        assert "Max-Age=0" in 쿠키("/로그아웃")         # 삭제(로그아웃)
+        그냥헤더 = 쿠키("/그냥")                          # 문자열 값 → 기존 동작(Max-Age 없음)
+        assert "Max-Age" not in 그냥헤더 and 그냥헤더.endswith("; Path=/; HttpOnly")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_POST_폼본문():
     # POST 폼(application/x-www-form-urlencoded) 본문 → 요청["질의"] 로 파싱(본문 문자열은 그대로 유지)
     import threading
