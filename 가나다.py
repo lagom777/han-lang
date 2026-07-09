@@ -1060,7 +1060,7 @@ def _거듭제곱(interp, args):        # 거듭제곱(밑, 지수)
     return args[0] ** args[1]
 
 
-def _입력(interp, args):           # 한 줄 입력받기 — 입력([프롬프트]) → 문자열
+def _입력(interp, args):           # 한 줄 입력받기 — 입력([프롬프트]) → 문자열, 입력이 끝나면(EOF) 없음
     if args:
         interp.out.write(문자열화(args[0]))
         try:
@@ -1068,7 +1068,7 @@ def _입력(interp, args):           # 한 줄 입력받기 — 입력([프롬�
         except Exception:
             pass
     line = sys.stdin.readline()
-    return line.rstrip('\n') if line else ''
+    return line.rstrip('\n') if line else None   # 빈 Enter는 ""(줄바꿈은 남음), EOF만 없음
 
 
 def _파일읽기(interp, args):       # 파일읽기(경로) → 파일 내용(문자열). 없거나 못 읽으면 오류
@@ -1096,6 +1096,82 @@ def _파일존재(interp, args):       # 파일존재(경로) → 참/거짓 (�
 
 def _파일목록(interp, args):       # 파일목록(경로) → 디렉터리 안 항목 이름 목록(정렬). 폴더 일괄 처리용
     return sorted(os.listdir(문자열화(args[0])))
+
+
+def _현재위치(interp, args):       # 현재위치() → 현재 작업 폴더 경로 문자열 (pwd)
+    return os.getcwd()
+
+
+def _위치변경(interp, args):       # 위치변경(경로) → 이동 후의 새 현재위치 문자열 (cd)
+    경로 = 문자열화(args[0]) if args else ''
+    if not os.path.isdir(경로):
+        raise HanError(f"위치변경: '{경로}' 폴더가 없습니다")
+    os.chdir(경로)
+    return os.getcwd()
+
+
+def _폴더생성(interp, args):       # 폴더생성(경로) → 참. 중간 폴더까지 만들고, 이미 있어도 오류 없음
+    os.makedirs(문자열화(args[0]), exist_ok=True)
+    return True
+
+
+def _파일삭제(interp, args):       # 파일삭제(경로) → 참. 파일 또는 빈 폴더 삭제(안 빈 폴더는 오류 — 실수 방지)
+    경로 = 문자열화(args[0])
+    if os.path.isdir(경로):
+        if os.listdir(경로):
+            raise HanError(f"파일삭제: '{경로}' 폴더가 비어있지 않습니다 (안의 파일부터 지우세요)")
+        os.rmdir(경로)
+        return True
+    if not os.path.exists(경로):
+        raise HanError(f"파일삭제: '{경로}' 가 없습니다")
+    os.remove(경로)
+    return True
+
+
+def _파일복사(interp, args):       # 파일복사(원본, 대상) → 복사된 최종 경로 문자열. 대상이 폴더면 그 안으로
+    import shutil
+    원본 = 문자열화(args[0])
+    if not os.path.isfile(원본):
+        raise HanError(f"파일복사: '{원본}' 파일이 없습니다")
+    return shutil.copy2(원본, 문자열화(args[1]))
+
+
+def _이름바꾸기(interp, args):     # 이름바꾸기(옛경로, 새경로) → 참. 같은 볼륨 안 이동 겸용(mv)
+    옛 = 문자열화(args[0])
+    if not os.path.exists(옛):
+        raise HanError(f"이름바꾸기: '{옛}' 가 없습니다")
+    os.rename(옛, 문자열화(args[1]))
+    return True
+
+
+def _파일정보(interp, args):       # 파일정보(경로) → {"종류": "파일"|"폴더", "크기": 바이트 정수, "수정시각": 유닉스초}
+    # 크기는 바이트 수 — 파일쓰기 반환값(글자 수)과 다름: 한글 한 글자는 UTF-8로 3바이트
+    경로 = 문자열화(args[0])
+    if not os.path.exists(경로):
+        raise HanError(f"파일정보: '{경로}' 가 없습니다")
+    st = os.stat(경로)
+    return {"종류": "폴더" if os.path.isdir(경로) else "파일", "크기": st.st_size, "수정시각": st.st_mtime}
+
+
+def _외부실행(interp, args):       # 외부실행(명령) → 종료코드 정수. stdout/stdin 상속(캡처 안 함) — 출력이 터미널에 바로 나오고 대화형 하위 프로그램 OK
+    import subprocess
+    return subprocess.run(문자열화(args[0]), shell=True).returncode
+
+
+def _날짜시간(interp, args):       # 날짜시간([유닉스초]) → "YYYY-MM-DD HH:MM:SS" 로컬 시각 문자열 (지금()과 짝)
+    import time
+    초 = args[0] if args and args[0] is not None else time.time()
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(초))
+
+
+_색상표 = {'빨강': 31, '초록': 32, '노랑': 33, '파랑': 34, '자주': 35, '청록': 36, '회색': 90, '굵게': 1}
+
+
+def _색칠(interp, args):           # 색칠(텍스트, 색이름) → ANSI 색 입힌 문자열. 렉서 이스케이프에 ESC가 없어 색은 이 함수로만 가능
+    색 = 문자열화(args[1]) if len(args) > 1 else ''
+    if 색 not in _색상표:
+        raise HanError(f"색칠: '{색}' 은 모르는 색입니다 (가능: {', '.join(_색상표)})")
+    return f"\x1b[{_색상표[색]}m" + 문자열화(args[0]) + "\x1b[0m"
 
 
 def _환경변수(interp, args):       # 환경변수(이름[, 기본값]) → 값, 없으면 기본값(미지정 시 없음)
@@ -1790,6 +1866,16 @@ BUILTINS = {
     '이어쓰기': _이어쓰기,
     '파일존재': _파일존재,
     '파일목록': _파일목록,
+    '현재위치': _현재위치,
+    '위치변경': _위치변경,
+    '폴더생성': _폴더생성,
+    '파일삭제': _파일삭제,
+    '파일복사': _파일복사,
+    '이름바꾸기': _이름바꾸기,
+    '파일정보': _파일정보,
+    '외부실행': _외부실행,
+    '날짜시간': _날짜시간,
+    '색칠': _색칠,
     '환경변수': _환경변수,
     '모듈': _모듈,
     '지금': _지금,

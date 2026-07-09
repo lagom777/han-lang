@@ -1619,6 +1619,150 @@ def test_방명록앱_멀티파일_통합():
         shutil.rmtree(d)
 
 
+def test_현재위치_위치변경():
+    import tempfile
+    d = tempfile.mkdtemp()
+    try:
+        out = run(f'출력(위치변경("{d}"))\n출력(현재위치())')
+        lines = out.strip().split('\n')
+        assert lines[0] == lines[1] == os.path.realpath(d)   # getcwd 는 심볼릭 링크 해소 경로
+    finally:
+        os.chdir(ROOT)   # 테스트 프로세스 cwd 오염 방지(다른 테스트의 상대경로 보호)
+    try:
+        run('위치변경("/이런_폴더는_없다_가나다")')
+        assert False, "없는 경로 오류가 나야 함"
+    except HanError as e:
+        assert '위치변경' in str(e) and '없습니다' in str(e)
+
+
+def test_폴더생성_파일정보():
+    import tempfile
+    d = tempfile.mkdtemp()
+    폴더 = os.path.join(d, '새폴더', '하위')                  # 중간 폴더까지 한 번에
+    파일 = os.path.join(d, '글.txt')
+    out = run(f'출력(폴더생성("{폴더}"))\n출력(파일정보("{폴더}")["종류"])\n'
+              f'파일쓰기("{파일}", "가나다")\n정보 = 파일정보("{파일}")\n'
+              '출력(정보["종류"] + " " + 정보["크기"])')
+    # 크기는 바이트 — 한글 3글자는 UTF-8 9바이트(파일쓰기 반환값 = 글자 수 3과 다름)
+    assert out == "참\n폴더\n파일 9\n"
+    try:
+        run(f'파일정보("{d}/없는것.txt")')
+        assert False, "없는 경로 오류가 나야 함"
+    except HanError as e:
+        assert '파일정보' in str(e)
+
+
+def test_파일복사_이름바꾸기_파일삭제():
+    import tempfile
+    d = tempfile.mkdtemp()
+    a = os.path.join(d, '원본.txt')
+    out = run(f'파일쓰기("{a}", "내용")\n'
+              f'사본 = 파일복사("{a}", "{d}/사본.txt")\n출력(파일읽기(사본))\n'
+              f'출력(이름바꾸기("{d}/사본.txt", "{d}/새이름.txt"))\n출력(파일존재("{d}/새이름.txt"))\n'
+              f'출력(파일삭제("{d}/새이름.txt"))\n출력(파일존재("{d}/새이름.txt"))')
+    assert out == "내용\n참\n참\n참\n거짓\n"
+    # 대상이 폴더면 그 안으로 복사(경로 반환)
+    sub = os.path.join(d, '속')
+    out = run(f'폴더생성("{sub}")\n출력(파일복사("{a}", "{sub}"))')
+    assert out.strip().endswith(os.path.join(sub, '원본.txt'))
+    # 안 빈 폴더 삭제는 친절한 오류(실수 방지)
+    try:
+        run(f'파일삭제("{sub}")')
+        assert False, "안 빈 폴더 오류가 나야 함"
+    except HanError as e:
+        assert '비어있지 않습니다' in str(e)
+
+
+def test_외부실행():
+    # stdout/stdin 상속(캡처 안 함)이라 종료코드로만 검증
+    assert run('출력(외부실행("true"))') == "0\n"
+    assert run('출력(외부실행("exit 7"))') == "7\n"
+
+
+def test_날짜시간():
+    import re
+    for src in ['출력(날짜시간())', '출력(날짜시간(0))']:     # 로컬 타임존이라 값 고정 비교 금지
+        assert re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\n', run(src))
+
+
+def test_색칠():
+    assert run('출력(색칠("x", "빨강"))') == "\x1b[31mx\x1b[0m\n"
+    assert run('출력(색칠("굵은", "굵게"))') == "\x1b[1m굵은\x1b[0m\n"
+    try:
+        run('색칠("x", "무지개")')
+        assert False, "모르는 색 오류가 나야 함"
+    except HanError as e:
+        assert '무지개' in str(e) and '빨강' in str(e)       # 색 목록 안내
+
+
+def test_입력_EOF없음():
+    old = sys.stdin
+    sys.stdin = io.StringIO("")                              # EOF → 없음
+    try:
+        assert run('출력(타입(입력()))') == "없음\n"
+    finally:
+        sys.stdin = old
+    sys.stdin = io.StringIO("\n")                            # 빈 Enter → 여전히 빈 문자열
+    try:
+        assert run('줄 = 입력()\n출력(타입(줄))\n출력(길이(줄))') == "문자열\n0\n"
+    finally:
+        sys.stdin = old
+
+
+def test_가나다셸_파이프():
+    # 위치변경이 os.chdir(프로세스 전역)라 in-process 금지 — subprocess 로 임시 폴더에서
+    import subprocess
+    import tempfile
+    d = tempfile.mkdtemp()
+    명령들 = "어디\n만들기 메모.txt\n목록\n보기 메모.txt\n지우기 메모.txt\n예\n목록\n끝\n"
+    p = subprocess.run(
+        [sys.executable, os.path.join(ROOT, '가나다.py'), '실행',
+         os.path.join(ROOT, 'examples', '가나다셸.ㄱㄴㄷ')],
+        input=명령들, capture_output=True, text=True, cwd=d, timeout=60)
+    assert p.returncode == 0, p.stderr
+    s = p.stdout
+    assert os.path.realpath(d) in s                          # 어디 → 임시 폴더 경로
+    assert "빈 파일 생성: 메모.txt" in s                     # 만들기
+    assert "파일 1개" in s                                   # 목록에 등장
+    assert "지웠어요: 메모.txt" in s                         # 지우기(예 확인)
+    뒤 = s.split("지웠어요: 메모.txt")[1]
+    assert "메모.txt" not in 뒤 and "파일 0개" in 뒤          # 삭제 후 목록엔 없음
+
+
+def test_메모장_파이프():
+    import tempfile
+    d = tempfile.mkdtemp()
+    경로 = os.path.join(d, '쪽지.txt')
+    with open(os.path.join(ROOT, 'examples', '메모장.ㄱㄴㄷ'), encoding='utf-8') as f:
+        src = f.read()
+    old = sys.stdin
+    sys.stdin = io.StringIO(f"{경로}\n줄추가 안녕 가나다\n보기\n저장\n끝\n")
+    out = io.StringIO()
+    try:
+        실행소스(src, out=out, base_dir=os.path.join(ROOT, 'examples'))
+    finally:
+        sys.stdin = old
+    s = out.getvalue()
+    assert "1 | 안녕 가나다" in s and "저장" in s
+    with open(경로, encoding='utf-8') as f:
+        assert f.read() == "안녕 가나다"
+
+
+def test_계산기_파이프():
+    with open(os.path.join(ROOT, 'examples', '계산기.ㄱㄴㄷ'), encoding='utf-8') as f:
+        src = f.read()
+    old = sys.stdin
+    sys.stdin = io.StringIO("3 + 4\n10 / 4\n10 / 0\n끝\n")
+    out = io.StringIO()
+    try:
+        실행소스(src, out=out)
+    finally:
+        sys.stdin = old
+    s = out.getvalue()
+    assert "= 7" in s and "= 2.5" in s
+    assert "0으로는 나눌 수 없어요" in s
+
+
 if __name__ == '__main__':
     fns = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
