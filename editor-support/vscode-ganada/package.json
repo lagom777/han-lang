@@ -1,0 +1,35 @@
+{
+  "name": "vscode-ganada",
+  "displayName": "가나다 (ganada)",
+  "description": "한글 프로그래밍 언어 가나다(.ㄱㄴㄷ) 문법 하이라이트",
+  "version": "0.1.0",
+  "publisher": "han-lang",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ganada",
+        "aliases": [
+          "가나다",
+          "ganada"
+        ],
+        "extensions": [
+          ".ㄱㄴㄷ"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ganada",
+        "scopeName": "source.ganada",
+        "path": "./syntaxes/ganada.tmLanguage.json"
+      }
+    ]
+  }
+}
