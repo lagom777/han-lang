@@ -481,13 +481,16 @@ class Interp:
             env.vars[node[1]] = Func(node[1], node[2], node[3], env)
         elif t == 'if':
             if 참인가(self.eval(node[1], env)):
-                self.exec(node[2], env)
+                self.exec_block(node[2], env)
             elif node[3] is not None:
-                self.exec(node[3], env)
+                if node[3][0] == 'if':
+                    self.exec(node[3], env)
+                else:
+                    self.exec_block(node[3], env)
         elif t == 'while':
             while 참인가(self.eval(node[1], env)):
                 try:
-                    self.exec(node[2], env)
+                    self.exec_block(node[2], env)
                 except BreakSignal:
                     break
                 except ContinueSignal:
@@ -534,7 +537,7 @@ class Interp:
             raise ContinueSignal()
         elif t == 'try':
             try:
-                self.exec(node[1], env)
+                self.exec_block(node[1], env)
             except HanError as e:
                 scope = Env(env)
                 scope.vars[node[2]] = str(e)
