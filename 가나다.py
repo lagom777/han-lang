@@ -16,6 +16,7 @@ import random as _random
 import json as _json
 import urllib.request
 import unicodedata
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class HanError(Exception):
@@ -981,8 +982,10 @@ def _절댓값(interp, args):
     return abs(args[0])
 
 
-def _반올림(interp, args):          # 반올림(수[, 소수자리])
-    return round(args[0], int(args[1])) if len(args) > 1 else round(args[0])
+def _반올림(interp, args):          # 반올림(수[, 소수자리]) — 한국식 사사오입(5는 올림, 0에서 멀어지는 방향)
+    자리 = int(args[1]) if len(args) > 1 else 0
+    결과 = Decimal(str(args[0])).quantize(Decimal(1).scaleb(-자리), rounding=ROUND_HALF_UP)
+    return float(결과) if len(args) > 1 else int(결과)
 
 
 def _천단위(interp, args):          # 천단위(숫자) → 천 단위 콤마 문자열 (예: 1234567 → "1,234,567")
