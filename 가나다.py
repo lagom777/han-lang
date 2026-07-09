@@ -925,6 +925,14 @@ def _다듬기(interp, args):          # 앞뒤 공백 제거
     return args[0].strip()
 
 
+def _왼다듬기(interp, args):        # 왼쪽(앞) 공백만 제거
+    return args[0].lstrip()
+
+
+def _오른다듬기(interp, args):      # 오른쪽(뒤) 공백만 제거
+    return args[0].rstrip()
+
+
 def _말줄임(interp, args):          # 말줄임(문자열, 최대길이) → 길면 잘라 "…" 붙임(UI 표시·프롬프트 트림)
     s = 문자열화(args[0])
     n = int(args[1]) if len(args) > 1 else 0
@@ -1738,6 +1746,8 @@ BUILTINS = {
     '대문자': _대문자,
     '소문자': _소문자,
     '다듬기': _다듬기,
+    '왼다듬기': _왼다듬기,
+    '오른다듬기': _오른다듬기,
     '말줄임': _말줄임,
     '바꾸기': _바꾸기,
     '포함': _포함,
