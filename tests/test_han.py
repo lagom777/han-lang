@@ -1131,6 +1131,39 @@ def test_쿠키서버():
         httpd.server_close()
 
 
+def test_POST_폼본문():
+    # POST 폼(application/x-www-form-urlencoded) 본문 → 요청["질의"] 로 파싱(본문 문자열은 그대로 유지)
+    import threading
+    import http.client
+    import urllib.parse
+
+    src = (
+        '함수 등록(요청) {\n'
+        '    반환 "이름=" + 값얻기(요청["질의"], "이름", "없음") + " 본문=" + 요청["본문"]\n'
+        '}\n'
+        '라우트 = {"/등록": 등록}\n'
+    )
+    interp = 실행소스(src, out=io.StringIO())
+    httpd = _웹서버만들기(interp, 0, interp.g.vars['라우트'])
+    포트 = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        본문 = urllib.parse.urlencode({"이름": "철수", "내용": "폼 전송"})
+        conn = http.client.HTTPConnection("127.0.0.1", 포트)
+        conn.request("POST", urllib.parse.quote("/등록"), body=본문,
+                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        받은 = resp.read().decode("utf-8")
+        assert "이름=철수" in 받은          # 폼 필드가 질의로 들어옴
+        assert "본문=" + 본문 in 받은        # 원본 본문은 그대로 유지
+        conn.close()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_자료_왕복():
     # SQLite — 메모리 DB에 생성→삽입→질의 왕복 (한글 테이블·컬럼·값 그대로)
     src = (

@@ -1408,6 +1408,8 @@ def _웹서버만들기(interp, 포트, 라우트, 정적폴더=None):
             질의 = {k: v[0] for k, v in urllib.parse.parse_qs(parts.query).items()}
             길이 = int(self.headers.get('Content-Length') or 0)
             본문 = self.rfile.read(길이).decode('utf-8') if 길이 else ''
+            if self.command == 'POST' and (self.headers.get('Content-Type') or '').startswith('application/x-www-form-urlencoded'):
+                질의.update({k: v[0] for k, v in urllib.parse.parse_qs(본문).items()})   # POST 폼 필드도 질의로(본문 값 우선), 본문은 그대로 둔다
             쿠키 = {}
             for 쌍 in (self.headers.get('Cookie') or '').split(';'):
                 이름, _, 값 = 쌍.strip().partition('=')
