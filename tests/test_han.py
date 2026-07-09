@@ -90,6 +90,21 @@ def test_func_recursion():
     assert run(src) == "120\n"
 
 
+def test_깊은재귀_친절오류():
+    # 무한 재귀는 원시 RecursionError(파이썬 트레이스백) 대신 HanError로 안내되고,
+    # 시도/잡기로 잡혀 프로그램이 계속 이어져야 함
+    src = ('함수 세기(n){ 반환 1 + 세기(n + 1) }\n'
+           '시도 { 출력(세기(0)) } 잡기(오류) { 출력("잡음") }\n'
+           '출력("계속")')
+    assert run(src) == "잡음\n계속\n"
+    # 시도/잡기 밖이면 RecursionError가 아니라 친절한 HanError여야 함
+    try:
+        run('함수 세기(n){ 반환 1 + 세기(n + 1) }\n출력(세기(0))')
+        assert False, "재귀 오류가 나야 함"
+    except HanError as e:
+        assert '재귀' in str(e)
+
+
 def test_while_accumulate():
     src = '합 = 0\n수 = 1\n동안 수 <= 5 { 합 = 합 + 수\n수 = 수 + 1 }\n출력(합)'
     assert run(src) == "15\n"

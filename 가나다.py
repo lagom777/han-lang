@@ -427,12 +427,16 @@ class Interp:
         self.imported = set()
         self.modules = {}               # 모듈() 캐시 — 경로별 네임스페이스 사전(인터프리터당 1회 실행)
         self._거래연결 = set()          # 거래() 진행 중인 DB 연결 id — 안에서는 문장별 자동 커밋 보류
+        self._깊이 = 0                  # 함수 호출 중첩 깊이 — 700 넘으면 친절한 재귀 오류(시도/잡기로 잡힘)
+        sys.setrecursionlimit(max(sys.getrecursionlimit(), 6000))   # 파이썬 원시 크래시 전에 HanError로 안내
 
     def run(self, ast):
         try:
             self.exec_block(ast, self.g)
         except (BreakSignal, ContinueSignal):
             raise HanError(f"[{self.cur_line}행] '멈춤'/'계속'은 반복문 안에서만 쓸 수 있습니다")
+        except RecursionError:
+            raise HanError("재귀가 너무 깊습니다 (순환 참조나 무한 재귀가 아닌지 확인하세요)")
         except HanError as e:
             msg = str(e)
             if not msg.startswith('['):     # 행 정보 없는 런타임 오류에 현재 행 부착
@@ -693,10 +697,15 @@ class Interp:
         local = Env(fn.env)
         for i, (pname, default) in enumerate(params):
             local.vars[pname] = args[i] if i < len(args) else self.eval(default, local)
+        self._깊이 += 1
         try:
+            if self._깊이 > 700:        # 파이썬 RecursionError 전에 HanError로 안내(시도/잡기로 잡힘)
+                raise HanError("재귀가 너무 깊습니다 (무한 재귀가 아닌지 확인하세요)")
             self.exec_block(fn.body, local)
         except Return as r:
             return r.value
+        finally:
+            self._깊이 -= 1
         return None
 
 
@@ -1916,7 +1925,10 @@ def repl_eval(interp, src):
     ast = Parser(lex(src)).parse()
     if (ast[0] == 'block' and len(ast[1]) == 1 and ast[1][0][0] == 'stmt'
             and ast[1][0][2][0] == 'exprstmt'):
-        val = interp.eval(ast[1][0][2][1], interp.g)
+        try:
+            val = interp.eval(ast[1][0][2][1], interp.g)
+        except RecursionError:
+            raise HanError("재귀가 너무 깊습니다 (순환 참조나 무한 재귀가 아닌지 확인하세요)")
         return None if val is None else 문자열화(val)
     interp.run(ast)
     return None
