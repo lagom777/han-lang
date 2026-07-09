@@ -317,7 +317,7 @@ python3 가나다.py 실행 examples/한몸.ㄱㄴㄷ   # → http://localhost:8
 
 ```bash
 python3 가나다.py 실행 프로그램.ㄱㄴㄷ     # 파일 실행 (별칭: run)
-python3 가나다.py 대화                     # 대화형 REPL (별칭: repl; :도움 명령, :종료 끝내기)
+python3 가나다.py 대화                     # 대화형 REPL (별칭: repl; 방향키 히스토리·줄 편집, :기록 입력 목록, :도움 명령, :종료 끝내기)
 python3 tests/test_han.py                  # 테스트
 ```
 

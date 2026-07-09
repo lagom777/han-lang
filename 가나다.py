@@ -1911,7 +1911,7 @@ def repl_command(line, interp=None):
     if cmd in (':종료', ':끝'):
         return ('quit', None)
     if cmd == ':도움':
-        return ('print', "명령: :도움(도움말) :변수(정의된 변수) :비우기(변수 초기화) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
+        return ('print', "명령: :도움(도움말) :변수(정의된 변수) :기록(입력 기록) :비우기(변수 초기화) :종료(끝내기)\n내장함수: " + ', '.join(sorted(BUILTINS.keys())))
     if cmd in (':비우기', ':초기화'):
         if interp is None:
             return ('print', "(초기화할 수 없어요)")
@@ -1928,6 +1928,11 @@ def repl_command(line, interp=None):
             s = 문자열화(v)
             return s if len(s) <= 50 else s[:50] + '…'
         return ('print', '\n'.join(f"{k} = {_repr(v)}" for k, v in vs.items()))
+    if cmd == ':기록':
+        h = getattr(interp, 'history', None) or []
+        if not h:
+            return ('print', "기록이 없어요")
+        return ('print', '\n'.join(f"{i}. {s}" for i, s in enumerate(h, 1)))
     return ('print', f"알 수 없는 명령: {cmd} (:도움 으로 목록)")
 
 
@@ -1940,8 +1945,13 @@ def main(argv):
         except HanError as e:
             print(f"오류: {e}", file=sys.stderr); sys.exit(1)
     elif len(argv) == 1 or (len(argv) == 2 and argv[1] in ('repl', '대화')):
+        try:
+            import readline  # noqa: F401  방향키 히스토리·줄 편집(Ctrl-A/E/K)
+        except ImportError:
+            pass
         print("가나다 v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. :도움 으로 명령, 종료는 :종료/Ctrl-D")
         interp = Interp()
+        interp.history = []
         buf = ''
         while True:
             try:
@@ -1961,6 +1971,7 @@ def main(argv):
             if needs_more(buf):       # 블록 미완 → 계속 입력
                 continue
             src = buf; buf = ''
+            interp.history.append(src)
             try:
                 echo = repl_eval(interp, src)
                 if echo is not None:

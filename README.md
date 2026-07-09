@@ -8,7 +8,7 @@
 ## 실행
 ```bash
 python3 가나다.py 실행 examples/hello.ㄱㄴㄷ   # 파일 실행
-python3 가나다.py 대화                       # 대화형(REPL) — 여러 줄 블록 OK, 식은 값이 바로 나옴 (`:도움` 명령, `:종료` 끝내기)
+python3 가나다.py 대화                       # 대화형(REPL) — 여러 줄 블록 OK, 식은 값이 바로 나옴 (방향키로 이전 입력 불러오기, `:기록` 으로 입력 목록, `:도움` 명령, `:종료` 끝내기)
 python3 tests/test_han.py                 # 테스트
 ```
 

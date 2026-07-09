@@ -801,6 +801,21 @@ def test_repl_command_비우기():
     assert run('출력(천단위(-12345))') == "-12,345\n"
 
 
+def test_repl_command_기록():
+    # :기록 은 REPL 세션에 제출된 입력을 번호 매겨 나열한다
+    it = Interp()
+    it.history = ['가 = 1', '가 + 2']
+    action, text = repl_command(":기록", it)
+    assert action == "print"
+    assert "1. 가 = 1" in text and "2. 가 + 2" in text
+    # 기록이 없으면 안내
+    empty = Interp()
+    empty.history = []
+    assert repl_command(":기록", empty) == ("print", "기록이 없어요")
+    # :도움에 :기록 안내
+    assert ":기록" in repl_command(":도움")[1]
+
+
 def test_dict_key_suggestion():
     # 키 오타 → 가까운 키 제안
     try:
