@@ -557,7 +557,12 @@ class Interp:
             return env.get(node[1])
         if t == 'un':
             v = self.eval(node[2], env)
-            return (not 참인가(v)) if node[1] == '아니다' else -v
+            if node[1] == '아니다':
+                return not 참인가(v)
+            try:
+                return -v
+            except TypeError:
+                raise self._연산오류('-', v)
         if t == 'bin':
             return self.binop(node[1], node[2], node[3], env)
         if t == 'list':
@@ -616,6 +621,10 @@ class Interp:
             return
         raise HanError("색인 대입할 수 없는 값입니다")
 
+    def _연산오류(self, op, *vals):     # 타입 안 맞는 연산 → 연산자·피연산자 타입 알려주는 친절한 오류
+        타입 = ' 와(과) '.join(_타입(self, [v]) for v in vals)
+        return HanError(f"'{op}' 연산을 할 수 없습니다: {타입}")
+
     def binop(self, op, ln, rn, env):
         if op == '그리고':
             l = self.eval(ln, env); return self.eval(rn, env) if 참인가(l) else l
@@ -626,28 +635,31 @@ class Interp:
             if isinstance(a, str) or isinstance(b, str):
                 return 문자열화(a) + 문자열화(b)
             return a + b
-        if op == '-':
-            return a - b
-        if op == '*':
-            return a * b
-        if op == '/':
-            if b == 0:
-                raise HanError("0으로 나눌 수 없습니다")
-            return a / b
-        if op == '%':
-            return a % b
         if op == '==':
             return a == b
         if op == '!=':
             return a != b
-        if op == '<':
-            return a < b
-        if op == '>':
-            return a > b
-        if op == '<=':
-            return a <= b
-        if op == '>=':
-            return a >= b
+        if op in ('/', '%') and b == 0:
+            raise HanError("0으로 나눌 수 없습니다")
+        try:
+            if op == '-':
+                return a - b
+            if op == '*':
+                return a * b
+            if op == '/':
+                return a / b
+            if op == '%':
+                return a % b
+            if op == '<':
+                return a < b
+            if op == '>':
+                return a > b
+            if op == '<=':
+                return a <= b
+            if op == '>=':
+                return a >= b
+        except TypeError:
+            raise self._연산오류(op, a, b) from None
         raise HanError(f"알 수 없는 연산자 {op}")
 
     def call(self, node, env):

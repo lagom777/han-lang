@@ -7,7 +7,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)  # 상대경로 가져오기("examples/..") 가 cwd와 무관하게 동작하도록
-from 가나다 import 실행소스, Interp, repl_eval, needs_more, repl_command, _웹서버만들기  # noqa: E402
+from 가나다 import 실행소스, Interp, repl_eval, needs_more, repl_command, _웹서버만들기, HanError  # noqa: E402
 
 
 def run(src):
@@ -63,6 +63,16 @@ def test_고르기_lazy_conditional():
     assert run('출력(고르기(0 != 0, 10 / 0, 999))') == "999\n"
     # 대입·중첩(등급 판정)
     assert run('점수 = 85\n출력(고르기(점수 >= 90, "A", 고르기(점수 >= 80, "B", "C")))') == "B\n"
+
+
+def test_operator_type_errors():
+    # 타입 안 맞는 연산·0 나머지: 파이썬 트레이스백 대신 친절한 HanError
+    for src in ['출력("5" - 3)', '나이="20"\n만약 나이 >= 18 {}', '출력(-"x")', '출력(5 % 0)']:
+        try:
+            run(src)
+            assert False, f"오류가 나야 함: {src}"
+        except HanError as e:
+            assert '연산을 할 수 없습니다' in str(e) or '0으로 나눌 수 없습니다' in str(e)
 
 
 def test_func_recursion():
