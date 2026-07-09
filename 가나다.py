@@ -426,6 +426,7 @@ class Interp:
         self.base_dir = '.'
         self.imported = set()
         self.modules = {}               # 모듈() 캐시 — 경로별 네임스페이스 사전(인터프리터당 1회 실행)
+        self._거래연결 = set()          # 거래() 진행 중인 DB 연결 id — 안에서는 문장별 자동 커밋 보류
 
     def run(self, ast):
         try:
@@ -1498,13 +1499,18 @@ def _자료열기(interp, args):       # 자료열기(경로) → SQLite 핸들(
     return conn
 
 
+def _커밋(interp, conn):           # 거래() 안이면 커밋 보류(끝에 한꺼번에), 아니면 문장마다 자동 커밋
+    if id(conn) not in interp._거래연결:
+        conn.commit()
+
+
 def _실행(interp, args):           # 실행(핸들, SQL[, 인자목록]) → 변경 행 수(CREATE 등은 0). 문장마다 자동 커밋
     import sqlite3
     conn = _자료핸들('실행', args[0])
     인자 = _자료인자('실행', args)
     try:
         cur = conn.execute(문자열화(args[1]), 인자)
-        conn.commit()
+        _커밋(interp, conn)
     except sqlite3.Error as e:
         raise HanError(f"실행 오류: {e} (값 끼워넣기는 문자열 잇기 대신 ? 와 인자목록을 쓰세요)")
     return max(cur.rowcount, 0)
@@ -1564,7 +1570,7 @@ def _넣기(interp, args):           # 넣기(저장소, 사전) → 번호. 사
     기록 = {k: v for k, v in 사전.items() if k != '번호'}   # 번호는 저장소가 매긴다
     cur = 저장.연결.execute(f'INSERT INTO "{저장.이름}" (자료) VALUES (?)',
                           [_json.dumps(기록, ensure_ascii=False)])
-    저장.연결.commit()
+    _커밋(interp, 저장.연결)
     return cur.lastrowid
 
 
@@ -1591,7 +1597,7 @@ def _고치기(interp, args):         # 고치기(저장소, 번호, 사전) →
     d.pop('번호', None)             # 번호는 저장 안 함(id 가 원본)
     저장.연결.execute(f'UPDATE "{저장.이름}" SET 자료 = ? WHERE id = ?',
                     [_json.dumps(d, ensure_ascii=False), 번호])
-    저장.연결.commit()
+    _커밋(interp, 저장.연결)
     return True
 
 
@@ -1600,8 +1606,27 @@ def _빼기(interp, args):           # 빼기(저장소, 번호) → 성공여�
     if len(args) < 2:
         raise HanError('빼기: 빼기(저장소, 번호) — 지울 기록의 번호가 필요합니다')
     cur = 저장.연결.execute(f'DELETE FROM "{저장.이름}" WHERE id = ?', [int(args[1])])
-    저장.연결.commit()
+    _커밋(interp, 저장.연결)
     return cur.rowcount > 0
+
+
+def _거래(interp, args):           # 거래(핸들, 함수) → 함수 안 DB 작업을 하나로 묶어 성공 시 커밋, 오류 시 전부 롤백. 핸들은 자료열기()·저장소() 둘 다 OK. (v1: 중첩 미지원)
+    import sqlite3
+    핸들 = args[0] if args else None
+    함수 = args[1] if len(args) > 1 else None
+    conn = 핸들.연결 if isinstance(핸들, 저장소핸들) else 핸들
+    if not isinstance(conn, sqlite3.Connection):
+        raise HanError('거래: 첫 인자는 자료열기() 핸들이나 저장소() 여야 합니다')
+    interp._거래연결.add(id(conn))
+    try:
+        interp.apply_func(함수, [])
+        conn.commit()
+    except HanError:
+        conn.rollback()
+        raise
+    finally:
+        interp._거래연결.discard(id(conn))
+    return None
 
 
 # ------------------------------------------------------------ 한 몸 풀스택 ② HTML 도우미 (HTML 숨김)
@@ -1775,6 +1800,7 @@ BUILTINS = {
     '넣기': _넣기,
     '고치기': _고치기,
     '빼기': _빼기,
+    '거래': _거래,
     '문서': _문서,
     '글': _글,
     '목록': _목록태그,
