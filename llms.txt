@@ -338,15 +338,16 @@
 
 ```bash
 가나다 실행 프로그램.ㄱㄴㄷ                # 파일 실행 (별칭: run)
-가나다 대화                                # 대화형 REPL (별칭: repl; 종료는 :종료/Ctrl-D)
+가나다 대화                                # 대화형 REPL (별칭: repl; 식 값 에코, :도움, 종료 :종료/Ctrl-D)
 cd ganada-c && make                        # 빌드 → ganada-c/ganada
 cd ganada-c && make install                # 설치 (PREFIX ?= /usr/local) → 어디서나 `가나다`
-cd ganada-c && make test                   # 회귀 검사 (파이썬 없이 — 골든 코퍼스 대조)
+cd ganada-c && make test                   # 회귀 검사 (파이썬 없이 — 골든 코퍼스 대조, 케이스 311)
 cd ganada-c && make test-conform           # 참조 구현과 교차검증 (파이썬 필요)
-python3 tests/test_han.py                  # 참조 구현 자체 테스트 142개 (파이썬 필요)
+python3 tests/test_han.py                  # 참조 구현 자체 테스트 145개 (파이썬 필요)
 
 참조 구현으로 같은 프로그램을 돌려보려면: python3 가나다.py 실행 프로그램.ㄱㄴㄷ
-C 대화형은 아직 식 값 자동 표시와 `:도움`·`:변수`·`:기록`·`:비우기` 가 없다(참조 구현엔 있다).
+대화형 메타 명령(C·파이썬 동일): :도움 · :변수 · :기록 · :비우기 · :종료
+자기를 담은 목록/사전을 출력하면 순환 참조 오류(크래시 아님). 조사는 '를' 만('을' 은 구문 오류).
 ```
 
 ### 웹 배포 (외부 의존성 0 — 런타임에 파이썬 없음, libc 소켓만)
