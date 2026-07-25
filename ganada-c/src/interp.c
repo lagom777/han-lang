@@ -893,21 +893,56 @@ void exec_block(Interp *it, Node *blk, Env *env) {
     }
 }
 
-/* ---------------------------------------------------------------- run */
-char *interp_run_source(Interp *it, const char *src) {
-    Handler h;
-    PUSH_H(it, h);
-    int code = _setjmp(h.jb);
-    if (code == 0) {
-        int n;
-        Tok *toks = lex_all(it, src, &n);
-        Node *ast = parse_all(it, toks);
-        free(toks);                /* the ast keeps no Tok pointers */
-        exec_block(it, ast, it->g);
-        POP_H(it);
-        return NULL;
+/* ---------------------------------------------------------------- env list / clear (REPL) */
+int env_clear(Env *e) {
+    if (!e) return 0;
+    if (e->shared) {
+        int n = (int)e->shared->n;
+        e->shared->n = 0;
+        /* leave capacity; entries unused until overwritten */
+        if (e->shared->idx) memset(e->shared->idx, 0, sizeof(uint32_t) * e->shared->icap);
+        return n;
     }
-    POP_H(it);
+    int n = e->n;
+    if (e->cap == ENV_INLINE) {
+        e->n = 0;
+    } else {
+        memset(e->keys, 0, sizeof(char *) * (size_t)e->cap);
+        e->n = 0;
+    }
+    return n;
+}
+
+int env_each(Env *e, void (*cb)(const char *name, Value v, void *ud), void *ud) {
+    if (!e) return 0;
+    int count = 0;
+    if (e->shared) {
+        for (long i = 0; i < e->shared->n; i++) {
+            Value k = e->shared->items[i].key;
+            if (k.tag != VT_STR) continue;
+            cb(k.as.s->data, e->shared->items[i].val, ud);
+            count++;
+        }
+        return count;
+    }
+    if (e->cap == ENV_INLINE) {
+        for (int i = 0; i < e->n; i++) {
+            cb(e->keys[i], e->vals[i], ud);
+            count++;
+        }
+        return count;
+    }
+    for (int i = 0; i < e->cap; i++) {
+        if (e->keys[i]) {
+            cb(e->keys[i], e->vals[i], ud);
+            count++;
+        }
+    }
+    return count;
+}
+
+/* ---------------------------------------------------------------- run */
+static char *finish_err(Interp *it, int code) {
     if (code == GS_RET) return NULL;   /* bare top-level return: stop quietly */
     char *msg;
     if (code == GS_ERR) {
@@ -926,4 +961,56 @@ char *interp_run_source(Interp *it, const char *src) {
         msg = nm;
     }
     return msg;
+}
+
+char *interp_run_source(Interp *it, const char *src) {
+    Handler h;
+    PUSH_H(it, h);
+    int code = _setjmp(h.jb);
+    if (code == 0) {
+        int n;
+        Tok *toks = lex_all(it, src, &n);
+        Node *ast = parse_all(it, toks);
+        free(toks);                /* the ast keeps no Tok pointers */
+        exec_block(it, ast, it->g);
+        POP_H(it);
+        return NULL;
+    }
+    POP_H(it);
+    return finish_err(it, code);
+}
+
+char *interp_repl_eval(Interp *it, const char *src, char **echo) {
+    *echo = NULL;
+    Handler h;
+    PUSH_H(it, h);
+    int code = _setjmp(h.jb);
+    if (code == 0) {
+        int n;
+        Tok *toks = lex_all(it, src, &n);
+        Node *ast = parse_all(it, toks);
+        free(toks);
+        /* single expression statement → echo its value (like 가나다.py repl_eval) */
+        if (ast->kind == N_BLOCK && ast->nitems == 1) {
+            Node *st = ast->items[0];
+            Node *body = (st->kind == N_STMT) ? st->a : st;
+            if (body && body->kind == N_EXPRSTMT) {
+                if (st->kind == N_STMT) it->cur_line = st->line;
+                Value v = eval_node(it, body->a, it->g);
+                if (v.tag != VT_NIL) {
+                    Str *s = v_stringify(v);
+                    *echo = malloc(s->len + 1);
+                    memcpy(*echo, s->data, s->len);
+                    (*echo)[s->len] = 0;
+                }
+                POP_H(it);
+                return NULL;
+            }
+        }
+        exec_block(it, ast, it->g);
+        POP_H(it);
+        return NULL;
+    }
+    POP_H(it);
+    return finish_err(it, code);
 }

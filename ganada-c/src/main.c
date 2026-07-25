@@ -171,9 +171,124 @@ static int needs_more(const char *src) {
     return in_str || depth > 0;
 }
 
+/* ---- REPL meta commands (:도움 · :변수 · :기록 · :비우기) + expr echo ---- */
+typedef struct { char **items; int n, cap; } Hist;
+
+static void hist_push(Hist *h, const char *s) {
+    if (h->n == h->cap) {
+        h->cap = h->cap ? h->cap * 2 : 16;
+        h->items = realloc(h->items, sizeof(char *) * (size_t)h->cap);
+    }
+    h->items[h->n++] = strdup(s);
+}
+
+typedef struct { char *buf; size_t n, cap; } GBuf;
+static void gb_init(GBuf *b) { b->buf = malloc(256); b->n = 0; b->cap = 256; b->buf[0] = 0; }
+static void gb_put(GBuf *b, const char *s) {
+    size_t L = strlen(s);
+    if (b->n + L + 1 > b->cap) {
+        while (b->n + L + 1 > b->cap) b->cap *= 2;
+        b->buf = realloc(b->buf, b->cap);
+    }
+    memcpy(b->buf + b->n, s, L + 1);
+    b->n += L;
+}
+
+static int qsort_cstr(const void *a, const void *b) {
+    return strcmp(*(const char *const *)a, *(const char *const *)b);
+}
+
+static void cmd_help(void) {
+    printf("%s\n%s", STR_HELP_LINE, STR_BUILTINS_LABEL);
+    const char **names = malloc(sizeof(char *) * B_COUNT);
+    for (int i = 0; i < B_COUNT; i++) names[i] = BUILTIN_NAMES[i];
+    qsort(names, B_COUNT, sizeof(char *), qsort_cstr);
+    for (int i = 0; i < B_COUNT; i++) {
+        if (i) printf(", ");
+        printf("%s", names[i]);
+    }
+    printf("\n");
+    free(names);
+}
+
+typedef struct { GBuf *out; int first; } VarDump;
+static void var_cb(const char *name, Value v, void *ud) {
+    VarDump *d = ud;
+    if (!d->first) gb_put(d->out, "\n");
+    d->first = 0;
+    gb_put(d->out, name);
+    gb_put(d->out, " = ");
+    Str *s = v_stringify(v);
+    if (s->len <= 50) {
+        gb_put(d->out, s->data);
+    } else {
+        char tmp[64];
+        memcpy(tmp, s->data, 50);
+        tmp[50] = 0;
+        gb_put(d->out, tmp);
+        gb_put(d->out, "\xE2\x80\xA6"); /* … */
+    }
+}
+
+static void cmd_vars(Interp *it) {
+    /* stringify may throw on cycle — catch so :변수 never aborts the REPL */
+    Handler h;
+    h.prev = it->top; it->top = &h;
+    int code = _setjmp(h.jb);
+    if (code == 0) {
+        GBuf b; gb_init(&b);
+        VarDump d = { &b, 1 };
+        int n = env_each(it->g, var_cb, &d);
+        if (n == 0) printf("%s\n", STR_NO_VARS);
+        else printf("%s\n", b.buf);
+        free(b.buf);
+        it->top = h.prev;
+    } else {
+        it->top = h.prev;
+        if (code == GS_ERR && it->err) {
+            printf("%s: %s\n", STR_OORYU, it->err);
+            free(it->err); it->err = NULL;
+        }
+    }
+}
+
+static void cmd_hist(Hist *h) {
+    if (!h->n) { printf("%s\n", STR_NO_HIST); return; }
+    for (int i = 0; i < h->n; i++)
+        printf("%d. %s\n", i + 1, h->items[i]);
+}
+
+/* 1 = handled (including quit via *quit=1), 0 = not a meta command */
+static int repl_command(const char *line, Interp *it, Hist *hist, int *quit) {
+    if (line[0] != ':') return 0;
+    if (!strcmp(line, ":quit") || !strcmp(line, STR_CMD_QUIT) || !strcmp(line, STR_CMD_END)) {
+        *quit = 1;
+        return 1;
+    }
+    if (!strcmp(line, STR_CMD_HELP)) { cmd_help(); return 1; }
+    if (!strcmp(line, STR_CMD_VARS) || !strcmp(line, STR_CMD_ENV)) { cmd_vars(it); return 1; }
+    if (!strcmp(line, STR_CMD_HIST)) { cmd_hist(hist); return 1; }
+    if (!strcmp(line, STR_CMD_CLEAR) || !strcmp(line, STR_CMD_RESET)) {
+        int n = env_clear(it->g);
+        printf(STR_CLEARED_FMT "\n", n);
+        return 1;
+    }
+    printf(STR_UNKNOWN_CMD_FMT "\n", line);
+    return 1;
+}
+
 static void repl(void) {
+#ifdef __has_include
+#  if __has_include(<readline/readline.h>)
+#    define GANADA_HAS_READLINE 1
+#  endif
+#endif
+#ifdef GANADA_HAS_READLINE
+    /* optional — not linked by default; fgets path is the portable baseline */
+#endif
     printf("%s\n", STR_BANNER);
     Interp *it = interp_new();
+    Hist hist = {0};
     char line[4096];
     char buf[65536];
     buf[0] = 0;
@@ -184,21 +299,31 @@ static void repl(void) {
         size_t ll = strlen(line);
         while (ll && (line[ll - 1] == '\n' || line[ll - 1] == '\r')) line[--ll] = 0;
         if (!buf[0]) {
-            if (!strcmp(line, ":quit") || !strcmp(line, STR_CMD_QUIT) || !strcmp(line, STR_CMD_END))
-                break;
+            int quit = 0;
+            if (repl_command(line, it, &hist, &quit)) {
+                if (quit) break;
+                continue;
+            }
             if (!ll) continue;
-            if (line[0] == ':') { printf("?\n"); continue; }
         }
         if (buf[0]) strncat(buf, "\n", sizeof(buf) - strlen(buf) - 1);
         strncat(buf, line, sizeof(buf) - strlen(buf) - 1);
         if (needs_more(buf)) continue;
-        char *err = interp_run_source(it, buf);
+        hist_push(&hist, buf);
+        char *echo = NULL;
+        char *err = interp_repl_eval(it, buf, &echo);
         if (err) {
             char *shown = attach_source_line(err, buf);
             printf("%s: %s\n", STR_OORYU, shown);
+            free(err);
+        } else if (echo) {
+            printf("%s\n", echo);
+            free(echo);
         }
         buf[0] = 0;
     }
+    for (int i = 0; i < hist.n; i++) free(hist.items[i]);
+    free(hist.items);
 }
 
 int main(int argc, char **argv) {

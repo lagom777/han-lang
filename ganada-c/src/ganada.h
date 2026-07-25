@@ -236,6 +236,13 @@ Value call_builtin(Interp *it, int id, Value *args, int n);
 int builtin_id_of(Interp *it, const char *interned_name);
 /* run a whole program; returns malloc'd error message or NULL */
 char *interp_run_source(Interp *it, const char *src);
+/* REPL: single expr → *echo (malloc'd display, free after print); else run.
+ * returns malloc'd error or NULL. *echo is NULL when nothing to echo. */
+char *interp_repl_eval(Interp *it, const char *src, char **echo);
+/* clear user bindings in env (global scope) — returns how many were removed */
+int env_clear(Env *e);
+/* iterate env bindings: cb(name, value, ud). returns count. */
+int env_each(Env *e, void (*cb)(const char *name, Value v, void *ud), void *ud);
 
 /* difflib-style ratio on utf8 strings */
 double seq_ratio(const char *a, const char *b);

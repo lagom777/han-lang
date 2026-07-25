@@ -127,6 +127,16 @@ EXTRA = {  # 상수명 → 문자열 (참/거짓/없음/함수 등 키워드와 
     'STR_POLDEEO': '폴더',
     'STR_CMD_QUIT': ':종료',      # 대화형 종료 명령 (가나다.py repl_command 와 같은 두 이름)
     'STR_CMD_END': ':끝',
+    'STR_CMD_HELP': ':도움',
+    'STR_CMD_VARS': ':변수',
+    'STR_CMD_ENV': ':환경',
+    'STR_CMD_HIST': ':기록',
+    'STR_CMD_CLEAR': ':비우기',
+    'STR_CMD_RESET': ':초기화',
+    'STR_HELP_LINE': '명령: :도움(도움말) :변수(정의된 변수) :기록(입력 기록) :비우기(변수 초기화) :종료(끝내기)',
+    'STR_BUILTINS_LABEL': '내장함수: ',
+    'STR_NO_VARS': '정의된 변수가 없어요',
+    'STR_NO_HIST': '기록이 없어요',
 }
 for name, s in EXTRA.items():
     check_in_src(s, name)
@@ -190,13 +200,16 @@ MESSAGES = {  # 상수명 → printf 형식 오류 메시지
     'FMT_KEYS_LIST': " (있는 키: %s)",
     # CLI 안내는 C 구현 고유다 — 실행 이름이 `가나다`(또는 ganada)이고 파이썬을 거치지 않는다.
     'STR_USAGE': '사용법: 가나다 실행 <파일.ㄱㄴㄷ>  |  가나다 대화',
-    # 배너도 고유 — C 대화형은 아직 식 값 자동 표시와 : 명령이 없다(과장하지 않는다).
-    'STR_BANNER': '가나다 v0 · 대화형. 여러 줄 블록 OK. 종료는 :종료/Ctrl-D',
+    # 파이썬 참조 구현 배너와 같은 수준(식 에코·: 명령 지원).
+    'STR_BANNER': '가나다 v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. :도움 으로 명령, 종료는 :종료/Ctrl-D',
     'STR_PROMPT': '가나다> ',
+    # f-string 이라 원문 바이트 불일치 — printf 형식은 C 전용
+    'STR_CLEARED_FMT': '변수 %d개를 지웠어요.',
+    'STR_UNKNOWN_CMD_FMT': "알 수 없는 명령: %s (:도움 으로 목록)",
 }
 # 원문에 없는 C 구현 고유 메시지 — 검증 면제
 ALLOW_NEW = {'ERR_NOT_IMPLEMENTED', 'ERR_FILE_READ', 'ERR_FILE_WRITE', 'ERR_JSON_PARSE',
-             'STR_USAGE', 'STR_BANNER'}
+             'STR_USAGE', 'STR_BANNER', 'STR_CLEARED_FMT', 'STR_UNKNOWN_CMD_FMT'}
 
 for name, fmt in MESSAGES.items():
     if name not in ALLOW_NEW:
