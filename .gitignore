@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 *.db
+
+# C 구현 빌드 산출물
+ganada-c/ganada
+ganada-c/*.o
+ganada-c/src/*.o
