@@ -696,6 +696,7 @@ static void do_import(Interp *it, const char *path) {
     int n;
     Tok *toks = lex_all(it, src, &n);
     Node *ast = parse_all(it, toks);
+    free(toks);                    /* the ast keeps no Tok pointers */
     char *prev = it->base_dir;
     it->base_dir = path_dirname(full);
     exec_block(it, ast, it->g);
@@ -785,17 +786,22 @@ static void exec(Interp *it, Node *node, Env *env) {
         volatile int64_t ii = use_int ? a.as.i : 0;
         int64_t iend = use_int ? b.as.i : 0, ist = use_int ? step.as.i : 1;
         double dend = to_dbl(b);
+        Env *volatile loop = NULL;      /* survives the jump: 계속/멈춤 must free it */
         for (;;) {
             if (use_int) { if (ist > 0 ? ii > iend : ii < iend) break; }
             else { if (sd > 0 ? vi > dend : vi < dend) break; }
             int code = _setjmp(h.jb);
             if (code == 0) {
-                Env *loop = env_new(it, env);
+                loop = env_new(it, env);
                 env_define(loop, node->name, use_int ? v_int(ii) : v_float(vi));
                 exec_block(it, body, loop);
                 env_release(it, loop);
-            } else if (code == GS_BRK) break;
-            else if (code != GS_CONT) { POP_H(it); g_throw(it, code); }
+                loop = NULL;
+            } else {
+                if (loop) { env_release(it, loop); loop = NULL; }
+                if (code == GS_BRK) break;
+                if (code != GS_CONT) { POP_H(it); g_throw(it, code); }
+            }
             if (use_int) ii += ist; else vi += sd;
         }
         POP_H(it);
@@ -812,6 +818,7 @@ static void exec(Interp *it, Node *node, Env *env) {
         Handler h;
         PUSH_H(it, h);
         volatile long idx = 0;
+        Env *volatile loop = NULL;      /* survives the jump: 계속/멈춤 must free it */
         while (idx < n) {
             int code = _setjmp(h.jb);
             if (code == 0) {
@@ -819,13 +826,17 @@ static void exec(Interp *it, Node *node, Env *env) {
                 if (coll.tag == VT_DICT) item = coll.as.d->items[idx].key;
                 else if (coll.tag == VT_LIST) item = coll.as.l->items[idx];
                 else item = v_str(str_char_at(coll.as.s, idx));
-                Env *loop = env_new(it, env);
+                loop = env_new(it, env);
                 env_define(loop, node->name, item);
                 if (node->str) env_define(loop, node->str, v_int(idx));
                 exec_block(it, body, loop);
                 env_release(it, loop);
-            } else if (code == GS_BRK) break;
-            else if (code != GS_CONT) { POP_H(it); g_throw(it, code); }
+                loop = NULL;
+            } else {
+                if (loop) { env_release(it, loop); loop = NULL; }
+                if (code == GS_BRK) break;
+                if (code != GS_CONT) { POP_H(it); g_throw(it, code); }
+            }
             idx++;
         }
         POP_H(it);
@@ -891,6 +902,7 @@ char *interp_run_source(Interp *it, const char *src) {
         int n;
         Tok *toks = lex_all(it, src, &n);
         Node *ast = parse_all(it, toks);
+        free(toks);                /* the ast keeps no Tok pointers */
         exec_block(it, ast, it->g);
         POP_H(it);
         return NULL;

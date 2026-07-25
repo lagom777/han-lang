@@ -1586,6 +1586,7 @@ static Value b_module(Interp *it, Value *args, int n) {
         int nt;
         Tok *toks = lex_all(it, src, &nt);
         Node *ast = parse_all(it, toks);
+        free(toks);                     /* the ast keeps no Tok pointers */
         exec_block(it, ast, env);
         it->top = h.prev;
     } else {
