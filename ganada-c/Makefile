@@ -37,7 +37,20 @@ golden:
 golden-check:
 	python3 tools/골든생성.py --확인
 
+# 설치 — 실행 이름은 `가나다`. ganada 도 같은 바이너리로 함께 깐다(ASCII 로 치고 싶을 때).
+PREFIX ?= /usr/local
+BINDIR = $(DESTDIR)$(PREFIX)/bin
+
+install: ganada
+	mkdir -p $(BINDIR)
+	install -m 755 ganada $(BINDIR)/가나다
+	install -m 755 ganada $(BINDIR)/ganada
+	@echo "설치 완료: $(BINDIR)/가나다  (사용: 가나다 실행 파일.ㄱㄴㄷ)"
+
+uninstall:
+	rm -f $(BINDIR)/가나다 $(BINDIR)/ganada
+
 clean:
 	rm -f ganada
 
-.PHONY: clean test test-conform golden golden-check
+.PHONY: clean test test-conform golden golden-check install uninstall

@@ -1,0 +1,21 @@
+#!/bin/sh
+# 가나다 실행 진입점 — C 네이티브 구현(ganada-c/)을 부른다. 파이썬을 쓰지 않는다.
+#
+#   ./가나다 실행 examples/hello.ㄱㄴㄷ
+#   ./가나다 대화
+#
+# 어디에 두고 실행해도 되게 저장소 위치는 이 스크립트 경로에서 찾는다.
+# 시스템에 설치하려면: cd ganada-c && make install   (그 뒤엔 `가나다` 로 바로)
+# (셸 변수 이름은 ASCII 만 허용돼서 여기만 영문이다 — 가나다 코드에는 이 제약이 없다.)
+set -e
+
+here=$(cd -- "$(dirname -- "$0")" && pwd)
+bin=$here/ganada-c/ganada
+
+# 처음 쓰는 경우 빌드한다 — C 컴파일러만 있으면 된다.
+if [ ! -x "$bin" ]; then
+    echo "가나다: C 구현을 빌드합니다 ($here/ganada-c)" >&2
+    make -C "$here/ganada-c" >&2
+fi
+
+exec "$bin" "$@"

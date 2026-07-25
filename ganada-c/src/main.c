@@ -184,7 +184,9 @@ static void repl(void) {
         size_t ll = strlen(line);
         while (ll && (line[ll - 1] == '\n' || line[ll - 1] == '\r')) line[--ll] = 0;
         if (!buf[0]) {
-            if (!strcmp(line, ":quit") || !ll) continue;
+            if (!strcmp(line, ":quit") || !strcmp(line, STR_CMD_QUIT) || !strcmp(line, STR_CMD_END))
+                break;
+            if (!ll) continue;
             if (line[0] == ':') { printf("?\n"); continue; }
         }
         if (buf[0]) strncat(buf, "\n", sizeof(buf) - strlen(buf) - 1);

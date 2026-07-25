@@ -125,6 +125,8 @@ EXTRA = {  # 상수명 → 문자열 (참/거짓/없음/함수 등 키워드와 
     'STR_SUJEONGSIGAG': '수정시각',
     'STR_PAIL': '파일',
     'STR_POLDEEO': '폴더',
+    'STR_CMD_QUIT': ':종료',      # 대화형 종료 명령 (가나다.py repl_command 와 같은 두 이름)
+    'STR_CMD_END': ':끝',
 }
 for name, s in EXTRA.items():
     check_in_src(s, name)
@@ -186,12 +188,15 @@ MESSAGES = {  # 상수명 → printf 형식 오류 메시지
     'FMT_CALL_ERR': "'%s' 호출 오류: %s",
     'FMT_SUGGEST': " (혹시 '%s'?)",
     'FMT_KEYS_LIST': " (있는 키: %s)",
-    'STR_USAGE': '사용법: python3 가나다.py 실행 <파일.ㄱㄴㄷ>  |  python3 가나다.py 대화',
-    'STR_BANNER': '가나다 v0 · 대화형. 여러 줄 블록 OK, 식은 값이 바로 나와요. :도움 으로 명령, 종료는 :종료/Ctrl-D',
+    # CLI 안내는 C 구현 고유다 — 실행 이름이 `가나다`(또는 ganada)이고 파이썬을 거치지 않는다.
+    'STR_USAGE': '사용법: 가나다 실행 <파일.ㄱㄴㄷ>  |  가나다 대화',
+    # 배너도 고유 — C 대화형은 아직 식 값 자동 표시와 : 명령이 없다(과장하지 않는다).
+    'STR_BANNER': '가나다 v0 · 대화형. 여러 줄 블록 OK. 종료는 :종료/Ctrl-D',
     'STR_PROMPT': '가나다> ',
 }
 # 원문에 없는 C 구현 고유 메시지 — 검증 면제
-ALLOW_NEW = {'ERR_NOT_IMPLEMENTED', 'ERR_FILE_READ', 'ERR_FILE_WRITE', 'ERR_JSON_PARSE'}
+ALLOW_NEW = {'ERR_NOT_IMPLEMENTED', 'ERR_FILE_READ', 'ERR_FILE_WRITE', 'ERR_JSON_PARSE',
+             'STR_USAGE', 'STR_BANNER'}
 
 for name, fmt in MESSAGES.items():
     if name not in ALLOW_NEW:
