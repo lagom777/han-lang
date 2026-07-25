@@ -24,8 +24,9 @@ PY_INTERP = os.path.join(REPO, '가나다.py')
 TEST_FILE = os.path.join(REPO, 'tests', 'test_han.py')
 EXAMPLES = os.path.join(REPO, 'examples')
 
-# v1 C 구현에서 빠진 기능이 포함된 예제는 SKIPPED 로 분류
-V1_UNSUPPORTED = re.compile(r'서버\(|자료열기|저장소\(|거래\(')
+# 서버(로 요청을 계속 받는 예제는 스스로 끝나지 않아 stdout 대조가 불가능하다
+# (파이썬·C 양쪽 다 timeout). v1 미지원이던 자료열기·저장소(·거래( 는 C 에 구현됐다.
+SERVER_BLOCKING = re.compile(r'서버\(')
 
 # 무작위 결과라 stdout 비교가 불가능한 예제
 NONDETERMINISTIC = {'random.ㄱㄴㄷ'}
@@ -162,7 +163,7 @@ def mode_examples(binary, verbose):
         path = os.path.join(EXAMPLES, fn)
         with open(path, encoding='utf-8') as f:
             src = f.read()
-        if V1_UNSUPPORTED.search(src) or fn in NONDETERMINISTIC:
+        if SERVER_BLOCKING.search(src) or fn in NONDETERMINISTIC:
             skipped += 1
             continue
         with tempfile.TemporaryDirectory() as td:
@@ -176,7 +177,7 @@ def mode_examples(binary, verbose):
         else:
             failed += 1
             fails.append((fn, py_out, py_err, c_out, c_err, c_rc))
-    print(f'[examples] {passed} 일치 / {failed} 불일치 / {skipped} 스킵 (v1 미지원·기준 실패)')
+    print(f'[examples] {passed} 일치 / {failed} 불일치 / {skipped} 스킵 (서버·무작위·기준 실패)')
     for fn, py_out, py_err, c_out, c_err, c_rc in fails[:15]:
         print(f'  FAIL {fn}')
         print(f'    py stdout: {(py_out or "")[:150]!r}')
