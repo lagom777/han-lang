@@ -646,7 +646,7 @@ static char *path_join_norm(const char *base, const char *path) {
         if (!strcmp(tok, "..")) { if (np > 0) np--; continue; }
         parts[np++] = tok;
     }
-    size_t outcap = strlen(full) + 2;
+    size_t outcap = need + 1;      /* strtok_r cut `full` up: use its old length */
     char *out = malloc(outcap);
     out[0] = 0;
     if (abs) strcat(out, "/");

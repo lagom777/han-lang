@@ -1550,7 +1550,7 @@ static char *mod_path_join(const char *base, const char *path) {
         if (!strcmp(tok, "..")) { if (np > 0) np--; continue; }
         parts[np++] = tok;
     }
-    char *out = malloc(strlen(full) + 2);
+    char *out = malloc(need + 1);   /* strtok_r cut `full` up: use its old length */
     out[0] = 0;
     if (abs) strcat(out, "/");
     for (int i = 0; i < np; i++) {
