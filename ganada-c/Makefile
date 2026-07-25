@@ -3,6 +3,11 @@ CFLAGS ?= -O2 -std=c11 -Wall -Wno-unused-function
 SRCS = src/main.c src/value.c src/lexer.c src/parser.c src/interp.c src/builtins.c src/gc.c
 HDRS = src/ganada.h src/tables.h
 
+# glibc 는 -std=c11 이면 POSIX 함수를 숨긴다(strdup·strtok_r·getline·localtime_r·
+# realpath·clock_gettime·sigaction·_longjmp·PATH_MAX…). macOS 헤더는 그냥 노출하지만
+# 리눅스 빌드에는 이 정의가 필요하다. CFLAGS 를 덮어써도 사라지지 않게 따로 둔다.
+DEFS = -D_GNU_SOURCE
+
 # 골든 검사용 — 검사할 바이너리(러너를 돌리는 것도 이것)
 GANADA_BIN ?= $(CURDIR)/ganada
 GANADA_REPO ?= $(CURDIR)/..
@@ -12,7 +17,7 @@ GOLDEN_ENV = GANADA_REPO=$(GANADA_REPO) GANADA_GOLDEN=$(GANADA_GOLDEN) \
              GANADA_BIN=$(GANADA_BIN) GANADA_GOLDEN_OK=$(GOLDEN_OK)
 
 ganada: $(SRCS) $(HDRS)
-	$(CC) $(CFLAGS) -o ganada $(SRCS) -lm
+	$(CC) $(CFLAGS) $(DEFS) -o ganada $(SRCS) -lm
 
 # 기본 회귀 검사 — 파이썬 없이 돈다(러너가 가나다로 쓰였고 C 바이너리가 실행한다).
 # 통과표 검사는 러너가 도중에 죽거나 오류 종료코드가 깨진 경우까지 실패로 잡기 위한 것.
