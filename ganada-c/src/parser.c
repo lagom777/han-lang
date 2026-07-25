@@ -25,7 +25,8 @@ static bool at(P *p, int kind, const char *val) {
 
 static Tok *eat(P *p, int kind, const char *val) {
     Tok *t = &p->toks[p->p];
-    if (kind && (t->kind != kind || (val && t->s != val))) {
+    /* T_KW is 0 — must not use `if (kind && …)` or keyword checks are skipped. */
+    if (t->kind != kind || (val && t->s != val)) {
         const char *want = val ? val : "?";
         char kb[8];
         if (!val) {

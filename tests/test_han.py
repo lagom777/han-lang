@@ -124,6 +124,17 @@ def test_순환참조_문자열화():
     assert run(src2) == "d\nok\n"
 
 
+def test_반복_조사_을_거부():
+    # 순회/범위 반복 조사는 '를' 만. '을' 은 구문 오류(C/파이썬 동일).
+    try:
+        run('반복 행 을 [1, 2] 에서 { 출력(행) }')
+        assert False, "을 은 구문 오류여야 함"
+    except HanError as e:
+        assert '를' in str(e) and '을' in str(e)
+    # '를' 은 정상
+    assert run('합 = 0\n반복 행 를 [1, 2] 에서 { 합 = 합 + 행 }\n출력(합)') == "3\n"
+
+
 def test_while_accumulate():
     src = '합 = 0\n수 = 1\n동안 수 <= 5 { 합 = 합 + 수\n수 = 수 + 1 }\n출력(합)'
     assert run(src) == "15\n"
