@@ -1,2 +1,2 @@
-가져오기 "examples/lib.ㄱㄴㄷ"
+모듈("examples/lib.ㄱㄴㄷ")
 출력(원주율)

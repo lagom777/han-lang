@@ -394,7 +394,8 @@ class Env:
         self.vars[name] = val           # 최상위는 아니고 현재 스코프에 새로 정의
 
 
-def 문자열화(v):
+def 문자열화(v, _seen=None):
+    """값 → 표시 문자열. 목록/사전이 자기를 담으면 순환 참조 오류(C 구현과 동일 문구)."""
     if v is True:
         return '참'
     if v is False:
@@ -406,9 +407,27 @@ def 문자열화(v):
     if isinstance(v, Func):
         return f"<함수 {v.name}>"
     if isinstance(v, list):
-        return '[' + ', '.join(문자열화(x) for x in v) + ']'
+        if _seen is None:
+            _seen = set()
+        i = id(v)
+        if i in _seen:
+            raise HanError("재귀가 너무 깊습니다 (순환 참조나 무한 재귀가 아닌지 확인하세요)")
+        _seen.add(i)
+        try:
+            return '[' + ', '.join(문자열화(x, _seen) for x in v) + ']'
+        finally:
+            _seen.discard(i)
     if isinstance(v, dict):
-        return '{' + ', '.join(문자열화(k) + ': ' + 문자열화(x) for k, x in v.items()) + '}'
+        if _seen is None:
+            _seen = set()
+        i = id(v)
+        if i in _seen:
+            raise HanError("재귀가 너무 깊습니다 (순환 참조나 무한 재귀가 아닌지 확인하세요)")
+        _seen.add(i)
+        try:
+            return '{' + ', '.join(문자열화(k, _seen) + ': ' + 문자열화(x, _seen) for k, x in v.items()) + '}'
+        finally:
+            _seen.discard(i)
     return str(v)
 
 

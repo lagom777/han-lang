@@ -165,6 +165,7 @@ enum { GC_STR, GC_LIST, GC_DICT, GC_FUNC, GC_ENV };
 
 void gc_init(void *stack_bottom);           /* called once from main */
 void gc_set_interp(Interp *it);
+Interp *gc_interp(void);                    /* current interp (NULL before set) */
 void *gc_alloc(size_t size, int kind);      /* collectable heap value */
 void *gc_alloc_perm(size_t size, int kind); /* never collected */
 void gc_keep_alive(void *p);                /* pin a local across a call */

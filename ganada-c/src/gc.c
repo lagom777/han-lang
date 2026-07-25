@@ -290,6 +290,7 @@ void gc_init(void *stack_bottom) {
 }
 
 void gc_set_interp(Interp *it) { g_it = it; }
+Interp *gc_interp(void) { return g_it; }
 
 void *gc_alloc(size_t size, int kind) {
     if (g_stress) {

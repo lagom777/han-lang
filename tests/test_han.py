@@ -105,6 +105,25 @@ def test_깊은재귀_친절오류():
         assert '재귀' in str(e)
 
 
+def test_순환참조_문자열화():
+    # 자기를 담은 목록/사전을 출력하면 SIGSEGV(C) 또는 파이썬 RecursionError 대신
+    # 친절한 순환 참조 오류. 시도/잡기로 회복 가능.
+    src = ('가 = []\n추가(가, 가)\n'
+           '시도 { 출력(가) } 잡기(오류) { 출력("잡음") }\n'
+           '출력("계속")')
+    assert run(src) == "잡음\n계속\n"
+    try:
+        run('가 = []\n추가(가, 가)\n출력(가)')
+        assert False, "순환 참조 오류가 나야 함"
+    except HanError as e:
+        assert '순환' in str(e) or '재귀' in str(e)
+    # 사전 자기참조
+    src2 = ('가 = {}\n가["x"] = 가\n'
+            '시도 { 출력(가) } 잡기(오류) { 출력("d") }\n'
+            '출력("ok")')
+    assert run(src2) == "d\nok\n"
+
+
 def test_while_accumulate():
     src = '합 = 0\n수 = 1\n동안 수 <= 5 { 합 = 합 + 수\n수 = 수 + 1 }\n출력(합)'
     assert run(src) == "15\n"

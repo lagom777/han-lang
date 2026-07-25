@@ -320,8 +320,35 @@ Str *str_float_repr(double x) {
     return str_from(buf);
 }
 
-/* ---------------------------------------------------------------- stringify */
+/* ---------------------------------------------------------------- stringify
+ * List/Dict can contain themselves (추가(가, 가)).  Walk without a visited set
+ * overflowed the C stack (SIGSEGV).  Track heap object pointers and raise the
+ * same Korean recursion/cycle error the reference implementation uses. */
 typedef struct { char *p; size_t n, cap; } SBuf;
+
+#define SS_MAX 512
+static void *ss_stack[SS_MAX];
+static int ss_n;
+
+static void ss_reset(void) { ss_n = 0; }
+
+/* 1 = pushed, 0 = cycle or depth cap (caller must raise) */
+static int ss_push(void *p) {
+    for (int i = 0; i < ss_n; i++)
+        if (ss_stack[i] == p) return 0;
+    if (ss_n >= SS_MAX) return 0;
+    ss_stack[ss_n++] = p;
+    return 1;
+}
+static void ss_pop(void) { if (ss_n > 0) ss_n--; }
+
+static void ss_cycle(void) {
+    Interp *it = gc_interp();
+    if (it) g_error(it, "%s", ERR_RECURSION_ALT);
+    /* no interp: should not happen after interp_new; abort rather than SIGSEGV */
+    fprintf(stderr, "fatal: cycle in stringify without interp\n");
+    exit(2);
+}
 
 static void sb_put(SBuf *b, const char *s, size_t n) {
     if (b->n + n + 1 > b->cap) {
@@ -356,15 +383,18 @@ static void stringify_into(SBuf *b, Value v) {
         return;
     }
     case VT_LIST: {
+        if (!ss_push(v.as.l)) ss_cycle();
         sb_cz(b, "[");
         for (long i = 0; i < v.as.l->n; i++) {
             if (i) sb_cz(b, ", ");
             stringify_into(b, v.as.l->items[i]);
         }
         sb_cz(b, "]");
+        ss_pop();
         return;
     }
     case VT_DICT: {
+        if (!ss_push(v.as.d)) ss_cycle();
         sb_cz(b, "{");
         for (long i = 0; i < v.as.d->n; i++) {
             if (i) sb_cz(b, ", ");
@@ -373,15 +403,19 @@ static void stringify_into(SBuf *b, Value v) {
             stringify_into(b, v.as.d->items[i].val);
         }
         sb_cz(b, "}");
+        ss_pop();
         return;
     }
     }
 }
 
 Str *v_stringify(Value v) {
+    /* longjmp on cycle skips ss_pop — always reset at entry */
+    ss_reset();
     SBuf b = { malloc(64), 0, 64 };
     b.p[0] = 0;
     stringify_into(&b, v);
+    ss_reset();
     return str_own(b.p, (uint32_t)b.n);
 }
 
