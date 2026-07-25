@@ -12,7 +12,7 @@ Value v_dict(Dict *d) { Value v; v.tag = VT_DICT; v.as.d = d; return v; }
 
 /* ---------------------------------------------------------------- strings */
 Str *str_new(const char *data, uint32_t len) {
-    Str *s = malloc(sizeof(Str) + len + 1);
+    Str *s = gc_alloc(sizeof(Str) + len + 1, GC_STR);
     s->len = len; s->cplen = UINT32_MAX; s->flags = 0;
     memcpy(s->data, data, len); s->data[len] = 0;
     return s;
@@ -20,8 +20,16 @@ Str *str_new(const char *data, uint32_t len) {
 
 Str *str_from(const char *cstr) { return str_new(cstr, (uint32_t)strlen(cstr)); }
 
+Str *str_perm(const char *cstr) {
+    uint32_t len = (uint32_t)strlen(cstr);
+    Str *s = gc_alloc_perm(sizeof(Str) + len + 1, GC_STR);
+    s->len = len; s->cplen = UINT32_MAX; s->flags = 0;
+    memcpy(s->data, cstr, len); s->data[len] = 0;
+    return s;
+}
+
 Str *str_own(char *data, uint32_t len) {
-    Str *s = malloc(sizeof(Str) + len + 1);
+    Str *s = gc_alloc(sizeof(Str) + len + 1, GC_STR);
     s->len = len; s->cplen = UINT32_MAX; s->flags = 0;
     memcpy(s->data, data, len); s->data[len] = 0;
     free(data);
@@ -29,7 +37,7 @@ Str *str_own(char *data, uint32_t len) {
 }
 
 Str *str_concat(Str *a, Str *b) {
-    Str *s = malloc(sizeof(Str) + a->len + b->len + 1);
+    Str *s = gc_alloc(sizeof(Str) + a->len + b->len + 1, GC_STR);
     s->len = a->len + b->len; s->cplen = UINT32_MAX;
     s->flags = a->flags & b->flags;      /* html only if both html */
     memcpy(s->data, a->data, a->len);
@@ -40,7 +48,7 @@ Str *str_concat(Str *a, Str *b) {
 
 Str *str_concat3(Str *a, Str *b, Str *c) {
     uint32_t n = a->len + b->len + c->len;
-    Str *s = malloc(sizeof(Str) + n + 1);
+    Str *s = gc_alloc(sizeof(Str) + n + 1, GC_STR);
     s->len = n; s->cplen = UINT32_MAX;
     s->flags = a->flags & b->flags & c->flags;
     memcpy(s->data, a->data, a->len);
@@ -97,7 +105,7 @@ Str *str_char_at(Str *s, long cpidx) { return str_sub_cp(s, cpidx, cpidx + 1); }
 
 /* ---------------------------------------------------------------- lists */
 List *list_new(long cap) {
-    List *l = malloc(sizeof(List));
+    List *l = gc_alloc(sizeof(List), GC_LIST);
     l->n = 0; l->cap = cap > 4 ? cap : 4;
     l->items = malloc(sizeof(Value) * l->cap);
     return l;
@@ -154,7 +162,7 @@ static void dict_rehash(Dict *d, uint32_t ncap) {
 }
 
 Dict *dict_new(void) {
-    Dict *d = malloc(sizeof(Dict));
+    Dict *d = gc_alloc(sizeof(Dict), GC_DICT);
     d->n = 0; d->cap = 8;
     d->items = malloc(sizeof(DEntry) * d->cap);
     d->icap = 16; d->idx = calloc(d->icap, sizeof(uint32_t));

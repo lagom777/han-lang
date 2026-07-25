@@ -421,7 +421,7 @@ static Node *parse_primary(P *p) {
     if (t->kind == T_STR) {
         eat(p, T_STR, NULL);
         Node *nd = node_new(p, N_LIT, t->line);
-        nd->lit = v_str(str_from(t->s));
+        nd->lit = v_str(str_perm(t->s));   /* ast outlives every collection */
         return nd;
     }
     if (t->kind == T_KW && t->s == intern_cz(it, KW_CHAM)) { eat(p, T_KW, NULL); Node *nd = node_new(p, N_LIT, t->line); nd->lit = v_bool(1); return nd; }

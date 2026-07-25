@@ -128,6 +128,7 @@ struct Env {
     Value ivals[ENV_INLINE];
     Dict *shared;               /* module env: storage shared with a dict */
     Env *pool_next;
+    uint32_t gcmark;            /* gc: visited stamp */
 };
 
 /* ---------------------------------------------------------------- interp */
@@ -159,6 +160,15 @@ struct Interp {
     int rng_seeded;
 };
 
+/* ---------------------------------------------------------------- gc.c */
+enum { GC_STR, GC_LIST, GC_DICT, GC_FUNC, GC_ENV };
+
+void gc_init(void *stack_bottom);           /* called once from main */
+void gc_set_interp(Interp *it);
+void *gc_alloc(size_t size, int kind);      /* collectable heap value */
+void *gc_alloc_perm(size_t size, int kind); /* never collected */
+void gc_keep_alive(void *p);                /* pin a local across a call */
+
 /* ---------------------------------------------------------------- value.c */
 Value v_nil(void);
 Value v_bool(int b);
@@ -170,6 +180,7 @@ Value v_dict(Dict *d);
 
 Str *str_new(const char *data, uint32_t len);
 Str *str_from(const char *cstr);
+Str *str_perm(const char *cstr);             /* uncollectable: ast literals */
 Str *str_own(char *data, uint32_t len);      /* takes ownership of malloc'd buf */
 Str *str_concat(Str *a, Str *b);
 Str *str_concat3(Str *a, Str *b, Str *c);

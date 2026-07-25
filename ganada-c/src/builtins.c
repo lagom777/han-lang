@@ -428,7 +428,7 @@ static Value b_reverse(Interp *it, Value *args, int n) {
     Value v = need_arg(it, args, n, 0, fn);
     if (v.tag == VT_STR) {
         Str *s = v.as.s;
-        Str *r = malloc(sizeof(Str) + s->len + 1);
+        Str *r = gc_alloc(sizeof(Str) + s->len + 1, GC_STR);
         r->len = s->len; r->cplen = UINT32_MAX; r->flags = s->flags;
         uint32_t o = 0;
         uint32_t i = s->len;
@@ -1192,12 +1192,15 @@ static Value b_sortby(Interp *it, Value *args, int n) {
     Value f = need_arg(it, args, n, 1, fn);
     KEnt *a = malloc(sizeof(KEnt) * (l->n ? l->n : 1));
     KEnt *tmp = malloc(sizeof(KEnt) * (l->n ? l->n : 1));
+    List *keys = list_new(l->n);         /* keys are only in `a`: keep them alive */
     for (long i = 0; i < l->n; i++) {
         a[i].val = l->items[i];
         a[i].key = apply_func(it, f, &l->items[i], 1);
+        list_push(keys, a[i].key);
         a[i].idx = i;
     }
     ksort(it, a, tmp, 0, l->n, fn);
+    gc_keep_alive(keys);
     List *out = list_new(l->n);
     if (n > 2 && v_truthy(args[2])) for (long i = l->n - 1; i >= 0; i--) list_push(out, a[i].val);
     else for (long i = 0; i < l->n; i++) list_push(out, a[i].val);
@@ -1212,12 +1215,15 @@ static Value b_topby(Interp *it, Value *args, int n) {
     Value f = need_arg(it, args, n, 2, fn);
     KEnt *a = malloc(sizeof(KEnt) * (l->n ? l->n : 1));
     KEnt *tmp = malloc(sizeof(KEnt) * (l->n ? l->n : 1));
+    List *keys = list_new(l->n);         /* keys are only in `a`: keep them alive */
     for (long i = 0; i < l->n; i++) {
         a[i].val = l->items[i];
         a[i].key = apply_func(it, f, &l->items[i], 1);
+        list_push(keys, a[i].key);
         a[i].idx = i;
     }
     ksort(it, a, tmp, 0, l->n, fn);
+    gc_keep_alive(keys);
     List *out = list_new(cnt);
     for (long i = l->n - 1; i >= 0 && (long)(l->n - 1 - i) < cnt; i--) list_push(out, a[i].val);
     free(a); free(tmp);

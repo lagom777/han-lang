@@ -42,6 +42,7 @@ int builtin_id_of(Interp *it, const char *name) {
 
 Interp *interp_new(void) {
     Interp *it = calloc(1, sizeof(Interp));
+    gc_set_interp(it);
     it->out = stdout;
     it->base_dir = strdup(".");
     it->ai_model = str_from(STR_DEFAULT_MODEL);
@@ -66,7 +67,12 @@ Interp *interp_new(void) {
 Env *env_new(Interp *it, Env *parent) {
     Env *e;
     if (it->env_pool) { e = it->env_pool; it->env_pool = e->pool_next; }
-    else e = malloc(sizeof(Env));
+    else {
+        /* envs are pooled, never freed; the gc header only lets a stack word
+         * pointing at an env be recognised as a root */
+        e = gc_alloc_perm(sizeof(Env), GC_ENV);
+        e->gcmark = 0;
+    }
     e->parent = parent;
     e->rc = 1;
     e->n = 0; e->cap = ENV_INLINE;
@@ -360,7 +366,7 @@ static Value binop(Interp *it, int op, Node *ln, Node *rn, Env *env) {
             if (seq.tag == VT_STR) {
                 if (n <= 0) return v_str(str_from(""));
                 uint32_t bl = seq.as.s->len;
-                Str *r = malloc(sizeof(Str) + bl * (uint64_t)n + 1);
+                Str *r = gc_alloc(sizeof(Str) + bl * (uint64_t)n + 1, GC_STR);
                 r->len = bl * (uint32_t)n; r->cplen = UINT32_MAX; r->flags = seq.as.s->flags;
                 for (int64_t i = 0; i < n; i++) memcpy(r->data + i * bl, seq.as.s->data, bl);
                 r->data[r->len] = 0;
@@ -551,19 +557,24 @@ static Value call_node(Interp *it, Node *node, Env *env) {
     }
     Value stack_args[16];
     Value *args = stack_args;
-    if (node->nitems > 16) args = malloc(sizeof(Value) * node->nitems);
+    List *spill = NULL;                  /* overflow args live in a gc value */
+    if (node->nitems > 16) {
+        spill = list_new(node->nitems);
+        for (int i = 0; i < node->nitems; i++) list_push(spill, v_nil());
+        args = spill->items;
+    }
     for (int i = 0; i < node->nitems; i++) args[i] = eval(it, node->items[i], env);
     if (callee->kind == N_VAR) {
         int id = builtin_id_of(it, callee->name);
         if (id >= 0) {
             Value r = builtin_dispatch(it, id, args, node->nitems);
-            if (args != stack_args) free(args);
+            gc_keep_alive(spill);
             return r;
         }
     }
     Value fnv = eval(it, callee, env);
     Value r = apply_func(it, fnv, args, node->nitems);
-    if (args != stack_args) free(args);
+    gc_keep_alive(spill);
     return r;
 }
 
@@ -597,7 +608,7 @@ static Value eval(Interp *it, Node *node, Env *env) {
         return v_dict(d);
     }
     case N_LAMBDA: {
-        Func *fn = malloc(sizeof(Func));
+        Func *fn = gc_alloc(sizeof(Func), GC_FUNC);
         fn->name = STR_LAMBDA_NAME;
         fn->pnames = node->pnames; fn->pdefs = node->pdefs; fn->nparams = node->nparams;
         fn->body = node->a;
@@ -725,7 +736,7 @@ static void exec(Interp *it, Node *node, Env *env) {
         return;
     }
     case N_FUNC: {
-        Func *fn = malloc(sizeof(Func));
+        Func *fn = gc_alloc(sizeof(Func), GC_FUNC);
         fn->name = node->name;
         fn->pnames = node->pnames; fn->pdefs = node->pdefs; fn->nparams = node->nparams;
         fn->body = node->a;

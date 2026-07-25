@@ -200,6 +200,7 @@ static void repl(void) {
 }
 
 int main(int argc, char **argv) {
+    gc_init(__builtin_frame_address(0));    /* high end of the stack to scan */
     if (argc >= 3 && (!strcmp(argv[1], "run") || !strcmp(argv[1], "\xEC\x8B\xA4\xED\x96\x89")))
         return run_file(argv[2]);
     if (argc == 1 || (argc == 2 && (!strcmp(argv[1], "repl") || !strcmp(argv[1], "\xEB\x8C\x80\xED\x99\x94")))) {
