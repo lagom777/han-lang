@@ -175,7 +175,7 @@ MESSAGES = {  # 상수명 → printf 형식 오류 메시지
     'ERR_JSON_PARSE': '제이슨파싱 오류: %s',
     'STR_AI_NO_KEY': '[AI 키 없음] OPENROUTER_API_KEY를 설정하면 실제 답을 받아요. (물음: %s)',
     'FMT_FUNC_REPR': '<함수 %s>',
-    'ERR_STORE_NAME': '저장소: 이름은 한글·영문·숫자·_ 로 된 한 단어여야 합니다',
+    'ERR_STORE_NAME': "저장소: 이름은 한글·영문·숫자·_ 로 된 한 단어여야 합니다 — '%s'",
     'ERR_CD_NOFOLDER': "위치변경: '%s' 폴더가 없습니다",
     'ERR_DEL_NOTEMPTY': "파일삭제: '%s' 폴더가 비어있지 않습니다 (안의 파일부터 지우세요)",
     'ERR_DEL_MISSING': "파일삭제: '%s' 가 없습니다",

@@ -3640,7 +3640,7 @@ static Value b_store(Interp *it, Value *args, int n) {
     if (n < 2) G_ERR0(it, ERR_STORE_ARGS);
     Str *path = v_stringify(args[0]);
     Str *name = v_stringify(args[1]);
-    if (!store_name_ok(name)) G_ERR0(it, ERR_STORE_NAME);
+    if (!store_name_ok(name)) g_error(it, ERR_STORE_NAME, name->data);
     Db *db = db_open(it, path->data);
     DbTable *t = tab_find(db, name->data, name->len);
     if (!t) {
