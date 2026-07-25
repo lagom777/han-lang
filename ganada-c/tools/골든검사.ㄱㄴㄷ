@@ -3,13 +3,17 @@
 #
 # 실행: make test            (직접: ./ganada 실행 tools/골든검사.ㄱㄴㄷ  — ganada-c 폴더에서)
 # 환경변수(전부 기본값 있음): GANADA_REPO 레포 뿌리 · GANADA_GOLDEN 코퍼스 · GANADA_BIN 검사할 바이너리
+#                            GANADA_GOLDEN_WORK 작업폴더(한 실행이 독차지해야 한다 — 아래 참고)
 # 코퍼스 형식·재생성·제외 규칙은 tests/golden/README.md 참고.
 
 뿌리 = 환경변수("GANADA_REPO", 현재위치() + "/..")
 골든 = 환경변수("GANADA_GOLDEN", 현재위치() + "/tests/golden")
 바이너리 = 환경변수("GANADA_BIN", 현재위치() + "/ganada")
 
-작업 = "/tmp/ganada-golden-work"          # 케이스 작업폴더·출력 캡처 (코퍼스를 더럽히지 않게 밖에 둔다)
+# 케이스 작업폴더·출력 캡처 (코퍼스를 더럽히지 않게 밖에 둔다).
+# 두 실행이 같은 폴더를 쓰면 서로의 출력 캡처를 덮고 임시칸을 rm -rf 해서 있지도 않은
+# 불일치가 잔뜩 나온다 — 그래서 make test 가 실행마다 다른 폴더를 넘긴다.
+작업 = 환경변수("GANADA_GOLDEN_WORK", "/tmp/ganada-golden-work")
 임시칸 = 작업 + "/칸"
 출력받기 = 작업 + "/출력.txt"
 오류받기 = 작업 + "/오류.txt"

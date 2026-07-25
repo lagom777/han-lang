@@ -12,9 +12,13 @@ DEFS = -D_GNU_SOURCE
 GANADA_BIN ?= $(CURDIR)/ganada
 GANADA_REPO ?= $(CURDIR)/..
 GANADA_GOLDEN ?= $(CURDIR)/tests/golden
-GOLDEN_OK = /tmp/ganada-golden-work/통과표
+# 작업폴더는 실행마다 달라야 한다 — 고정 경로를 쓰면 동시에 돈 두 검사가 서로의 출력
+# 캡처를 덮어써서 없는 불일치를 수십 건 만들어낸다(실제로 밟았다). := 로 한 번만 펼친다.
+GOLDEN_WORK := /tmp/ganada-golden-work-$(shell echo $$$$)
+GOLDEN_OK = $(GOLDEN_WORK)/통과표
 GOLDEN_ENV = GANADA_REPO=$(GANADA_REPO) GANADA_GOLDEN=$(GANADA_GOLDEN) \
-             GANADA_BIN=$(GANADA_BIN) GANADA_GOLDEN_OK=$(GOLDEN_OK)
+             GANADA_BIN=$(GANADA_BIN) GANADA_GOLDEN_OK=$(GOLDEN_OK) \
+             GANADA_GOLDEN_WORK=$(GOLDEN_WORK)
 
 ganada: $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) $(DEFS) -o ganada $(SRCS) -lm
@@ -22,9 +26,10 @@ ganada: $(SRCS) $(HDRS)
 # 기본 회귀 검사 — 파이썬 없이 돈다(러너가 가나다로 쓰였고 C 바이너리가 실행한다).
 # 통과표 검사는 러너가 도중에 죽거나 오류 종료코드가 깨진 경우까지 실패로 잡기 위한 것.
 test: ganada
-	@rm -f $(GOLDEN_OK)
+	@rm -rf $(GOLDEN_WORK)
 	@$(GOLDEN_ENV) $(GANADA_BIN) 실행 tools/골든검사.ㄱㄴㄷ || true
-	@test -f $(GOLDEN_OK) || { echo "[golden] 검사 실패 — 통과표 없음"; exit 1; }
+	@test -f $(GOLDEN_OK) || { echo "[golden] 검사 실패 — 통과표 없음 (작업폴더 남김: $(GOLDEN_WORK))"; exit 1; }
+	@rm -rf $(GOLDEN_WORK)
 
 # 교차 검증(파이썬 필요) — 가나다.py 를 정답지로 직접 대조
 test-conform:
