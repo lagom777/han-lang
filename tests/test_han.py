@@ -131,8 +131,23 @@ def test_반복_조사_을_거부():
         assert False, "을 은 구문 오류여야 함"
     except HanError as e:
         assert '를' in str(e) and '을' in str(e)
+    # 범위 반복도 동일
+    try:
+        run('반복 i 을 1 부터 3 까지 { 출력(i) }')
+        assert False, "범위 반복 을 도 구문 오류여야 함"
+    except HanError as e:
+        assert '를' in str(e)
     # '를' 은 정상
     assert run('합 = 0\n반복 행 를 [1, 2] 에서 { 합 = 합 + 행 }\n출력(합)') == "3\n"
+
+
+def test_상호_순환_참조_문자열화():
+    # 목록↔사전 상호 참조도 순환으로 잡힌다
+    src = ('가 = []\n나 = {}\n추가(가, 나)\n나["x"] = 가\n'
+           '시도 { 출력(가) } 잡기(e) { 출력("L") }\n'
+           '시도 { 출력(나) } 잡기(e) { 출력("D") }\n'
+           '출력("ok")')
+    assert run(src) == "L\nD\nok\n"
 
 
 def test_while_accumulate():
