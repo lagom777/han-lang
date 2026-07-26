@@ -740,11 +740,14 @@ bad:
     g_error(it, FMT_CALL_ERR, fn, "unorderable types");
 }
 
+/* 절댓값을 부호 없이 센다 — -INT64_MIN 은 부호 있는 오버플로(UB)였다.
+ * 값은 그대로다(2의 보수 그대로): |INT64_MIN| = 2^63 은 int64 에 안 담기므로
+ * 예전처럼 INT64_MIN 이 나온다. */
 static int64_t gcd64(int64_t a, int64_t b) {
-    if (a < 0) a = -a;
-    if (b < 0) b = -b;
-    while (b) { int64_t t = a % b; a = b; b = t; }
-    return a;
+    uint64_t x = a < 0 ? -(uint64_t)a : (uint64_t)a;
+    uint64_t y = b < 0 ? -(uint64_t)b : (uint64_t)b;
+    while (y) { uint64_t t = x % y; x = y; y = t; }
+    return (int64_t)x;
 }
 
 static Value b_gcd(Interp *it, Value *args, int n) {
@@ -759,8 +762,13 @@ static Value b_lcm(Interp *it, Value *args, int n) {
     int64_t a = to_int64(it, need_arg(it, args, n, 0, fn), fn);
     int64_t b = to_int64(it, need_arg(it, args, n, 1, fn), fn);
     if (!a || !b) return v_int(0);
-    int64_t g = gcd64(a, b);
-    int64_t r = a * b / g;
+    int64_t g = gcd64(a, b), r;
+    /* a*b/g 는 답이 int64 에 담기는 경우에도 중간곱이 넘쳐 UB 였다(3e9 * 4e9).
+     * g 는 a 를 나누므로 a/g 를 먼저 줄여 곱하면 답이 담기는 한 넘치지 않는다.
+     * 파이썬은 정수가 무한 자리라 늘 정확한 값을 주지만 여기서는 담을 수 없다 —
+     * 넘치면(절댓값이 2^63 인 경우까지) 조용한 쓰레기값 대신 오류로 끝낸다. */
+    if (__builtin_mul_overflow(a / g, b, &r) || r == INT64_MIN)
+        g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
     return v_int(r < 0 ? -r : r);
 }
 
@@ -788,9 +796,15 @@ static Value b_pow(Interp *it, Value *args, int n) {
     if (!is_num(a) || !is_num(b)) g_error(it, FMT_CALL_ERR, fn, "not a number");
     if (a.tag == VT_INT && b.tag == VT_INT && b.as.i >= 0) {
         int64_t base = a.as.i, e = b.as.i, r = 1;
+        /* 마지막 제곱은 아무도 쓰지 않는데 그 자리에서 넘쳤다 — 거듭제곱(10, 16) 은
+         * 답이 int64 에 담기는데도 UB 였다. 필요한 제곱만 하고, 정말 답이 안 담길
+         * 때만 오류로 끝낸다(파이썬은 무한 자리 정수라 이 한계가 없다). */
         while (e > 0) {
-            if (e & 1) r *= base;
-            base *= base; e >>= 1;
+            if ((e & 1) && __builtin_mul_overflow(r, base, &r))
+                g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
+            e >>= 1;
+            if (e && __builtin_mul_overflow(base, base, &base))
+                g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
         }
         return v_int(r);
     }
@@ -939,8 +953,14 @@ static Value b_copy(Interp *it, Value *args, int n) {
     FILE *fi = fopen(src->data, "rb");
     FILE *fo = final ? fopen(final, "wb") : NULL;
     if (!fi || !fo) {
+        /* 원본이 읽기 금지면 fi 만 NULL 이고 fo 는 열려 있다 — 그 FILE* 을 닫지 않아
+         * 파일서술자가 샜고, g_error 는 longjmp 라 final 도 그대로 샜다.
+         * 경로 문구는 GC 문자열로 옮겨두고 final 을 여기서 반납한다. */
         if (fi) fclose(fi);
-        g_error(it, ERR_FILE_WRITE, final);
+        if (fo) fclose(fo);
+        Str *bad = str_from(final ? final : dst->data);
+        free(final);
+        g_error(it, ERR_FILE_WRITE, bad->data);
     }
     char buf[8192]; size_t r;
     while ((r = fread(buf, 1, sizeof buf, fi)) > 0) fwrite(buf, 1, r, fo);
@@ -1740,6 +1760,24 @@ static void jp_ws(JP *j) {
 
 static Value jp_value(JP *j);
 
+/* JSON \u 는 정확히 4자리다. strtoul 은 뒤에 이어 붙은 hex 글자까지 삼켜서
+ * "\u0041BCD" 를 U+41BCD 로 읽었고(파이썬은 "ABCD"), 앞의 공백·부호·0x 접두도
+ * 받아줘서 "\u+041"·"\u 041" 이 조용히 통과했다(파이썬은 Invalid \uXXXX escape).
+ * 4자리를 넘겨 읽지 않고, hex 가 아니면 0 을 돌려 호출자가 거절하게 한다. */
+static int jp_hex4(const char *p, unsigned *out) {
+    unsigned v = 0;
+    for (int i = 0; i < 4; i++) {
+        int c = (unsigned char)p[i], d;
+        if (c >= '0' && c <= '9') d = c - '0';
+        else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
+        else return 0;                               /* NUL 도 여기서 멈춘다 */
+        v = (v << 4) | (unsigned)d;
+    }
+    *out = v;
+    return 1;
+}
+
 static Value jp_string(JP *j) {
     GB b; gb_init(&b);
     j->p++;   /* opening quote */
@@ -1763,11 +1801,16 @@ static Value jp_string(JP *j) {
                     free(b.p);
                     g_error(j->it, ERR_JSON_PARSE, "bad escape");
                 }
-                unsigned code = (unsigned)strtoul(j->p + 1, NULL, 16);
+                unsigned code, lo;
+                if (!jp_hex4(j->p + 1, &code)) {
+                    free(b.p);
+                    g_error(j->it, ERR_JSON_PARSE, "bad escape");
+                }
                 j->p += 5;
+                /* 뒤가 진짜 하위 서러게이트일 때만 짝을 맞춘다 — 아니면 파이썬처럼
+                 * 상위 서러게이트를 그대로 두고 다음 이스케이프를 따로 읽는다 */
                 if (code >= 0xD800 && code <= 0xDBFF && j->p[0] == '\\' && j->p[1] == 'u'
-                    && j->p[2] && j->p[3] && j->p[4] && j->p[5]) {
-                    unsigned lo = (unsigned)strtoul(j->p + 2, NULL, 16);
+                    && jp_hex4(j->p + 2, &lo) && lo >= 0xDC00 && lo <= 0xDFFF) {
                     code = 0x10000 + ((code - 0xD800) << 10) + (lo - 0xDC00);
                     j->p += 6;
                 }
