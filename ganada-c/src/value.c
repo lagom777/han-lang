@@ -58,13 +58,26 @@ Str *str_concat3(Str *a, Str *b, Str *c) {
     return s;
 }
 
-/* decode one codepoint; returns codepoint, advances *adv by bytes read */
+/* decode one codepoint; returns codepoint, advances *adv by bytes read.
+ * Every buffer handed here is NUL terminated (Str, source text, argv), so each
+ * continuation test doubles as the bounds check: a byte in 0x80..0xBF cannot be
+ * the terminator, which proves the byte after it is still inside the buffer.
+ * Without it a string ending in a lone lead byte (\xF0) read up to 3 bytes past
+ * the allocation — reachable from any %-encoded request path. */
 uint32_t utf8_dec(const char *p, uint32_t *adv) {
     const unsigned char *u = (const unsigned char *)p;
     if (u[0] < 0x80) { *adv = 1; return u[0]; }
-    if ((u[0] & 0xE0) == 0xC0) { *adv = 2; return ((u[0] & 0x1F) << 6) | (u[1] & 0x3F); }
-    if ((u[0] & 0xF0) == 0xE0) { *adv = 3; return ((u[0] & 0x0F) << 12) | ((u[1] & 0x3F) << 6) | (u[2] & 0x3F); }
-    if ((u[0] & 0xF8) == 0xF0) { *adv = 4; return ((u[0] & 0x07) << 18) | ((u[1] & 0x3F) << 12) | ((u[2] & 0x3F) << 6) | (u[3] & 0x3F); }
+    if ((u[0] & 0xE0) == 0xC0 && (u[1] & 0xC0) == 0x80) {
+        *adv = 2; return ((u[0] & 0x1F) << 6) | (u[1] & 0x3F);
+    }
+    if ((u[0] & 0xF0) == 0xE0 && (u[1] & 0xC0) == 0x80 && (u[2] & 0xC0) == 0x80) {
+        *adv = 3; return ((u[0] & 0x0F) << 12) | ((u[1] & 0x3F) << 6) | (u[2] & 0x3F);
+    }
+    if ((u[0] & 0xF8) == 0xF0 && (u[1] & 0xC0) == 0x80 && (u[2] & 0xC0) == 0x80
+        && (u[3] & 0xC0) == 0x80) {
+        *adv = 4;
+        return ((u[0] & 0x07) << 18) | ((u[1] & 0x3F) << 12) | ((u[2] & 0x3F) << 6) | (u[3] & 0x3F);
+    }
     *adv = 1; return 0xFFFD;
 }
 

@@ -20,6 +20,11 @@ GOLDEN_ENV = GANADA_REPO=$(GANADA_REPO) GANADA_GOLDEN=$(GANADA_GOLDEN) \
              GANADA_BIN=$(GANADA_BIN) GANADA_GOLDEN_OK=$(GOLDEN_OK) \
              GANADA_GOLDEN_WORK=$(GOLDEN_WORK)
 
+# 보안 회귀 그물 — 한때 메모리를 밟았던 입력들. 코퍼스와 따로 도는 이유는
+# 골든 코퍼스가 tools/골든생성.py 로 다시 만들어지는 자동 생성물이기 때문이다.
+SEC_WORK := /tmp/ganada-sec-work-$(shell echo $$$$)
+SEC_OK = $(SEC_WORK)/통과표
+
 ganada: $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) $(DEFS) -o ganada $(SRCS) -lm
 
@@ -30,6 +35,10 @@ test: ganada
 	@$(GOLDEN_ENV) $(GANADA_BIN) 실행 tools/골든검사.ㄱㄴㄷ || true
 	@test -f $(GOLDEN_OK) || { echo "[golden] 검사 실패 — 통과표 없음 (작업폴더 남김: $(GOLDEN_WORK))"; exit 1; }
 	@rm -rf $(GOLDEN_WORK)
+	@rm -rf $(SEC_WORK)
+	@GANADA_SEC_WORK=$(SEC_WORK) GANADA_SEC_OK=$(SEC_OK) $(GANADA_BIN) 실행 tests/보안회귀.ㄱㄴㄷ || true
+	@test -f $(SEC_OK) || { echo "[보안회귀] 검사 실패 — 통과표 없음 (작업폴더 남김: $(SEC_WORK))"; exit 1; }
+	@rm -rf $(SEC_WORK)
 
 # 교차 검증(파이썬 필요) — 가나다.py 를 정답지로 직접 대조
 test-conform:

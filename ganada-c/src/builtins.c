@@ -592,8 +592,13 @@ static Value b_abs(Interp *it, Value *args, int n) {
 }
 
 /* round decimal string (shortest repr) half-up at `digits` fractional places.
- * writes result decimal string into out (size >= 128) */
-static void round_half_up(const char *in, int64_t digits, char *out) {
+ * writes result decimal string into out (cap bytes, cap >= 160) */
+static void round_half_up(const char *in, int64_t digits, char *out, size_t cap) {
+    /* digits comes straight from the program, and the plain form below spells out
+     * one character per place while E + digits must stay in range.  A double
+     * resolves nothing past ~330 places, so clamping changes no result. */
+    if (digits > 100000) digits = 100000;
+    else if (digits < -100000) digits = -100000;
     int neg = 0;
     const char *p = in;
     if (*p == '-') { neg = 1; p++; }
@@ -640,9 +645,19 @@ static void round_half_up(const char *in, int64_t digits, char *out) {
         }
     }
     if (nk == 0) { strcpy(out, "0"); return; }
-    /* result = keptInt x 10^-digits */
+    /* result = keptInt x 10^-digits.  Spelling every zero out needs digits+3
+     * bytes, well past `out` once digits is large, so switch to the exponent
+     * form there — the caller's strtod/strtoll read the same value from either. */
+    int64_t need = (neg ? 1 : 0) + 1
+                 + (digits <= 0 ? (int64_t)nk - digits
+                                : ((int64_t)nk > digits ? (int64_t)nk + 1 : digits + 2));
     char *o = out;
     if (neg) *o++ = '-';
+    if (need > (int64_t)cap) {
+        memcpy(o, kept, (size_t)nk); o += nk;        /* nk <= 121: the exponent fits */
+        snprintf(o, cap - (size_t)(o - out), "e%lld", (long long)-digits);
+        return;
+    }
     if (digits <= 0) {
         memcpy(o, kept, nk); o += nk;
         for (int64_t i = 0; i < -digits; i++) *o++ = '0';
@@ -673,7 +688,7 @@ static Value b_round(Interp *it, Value *args, int n) {
         fmt_float(x.as.f, buf);
     } else g_error(it, FMT_CALL_ERR, fn, "not a number");
     char out[160];
-    round_half_up(buf, digits, out);
+    round_half_up(buf, digits, out, sizeof out);
     if (n > 1) return v_float(strtod(out, NULL));
     return v_int(strtoll(out, NULL, 10));
 }
@@ -1731,9 +1746,16 @@ static Value jp_string(JP *j) {
             case '"': gb_ch(&b, '"'); j->p++; break;
             case '\\': gb_ch(&b, '\\'); j->p++; break;
             case 'u': {
+                /* a cut off escape must not skip past the terminator: each test
+                 * proves the next byte is still inside the string */
+                if (!j->p[1] || !j->p[2] || !j->p[3] || !j->p[4]) {
+                    free(b.p);
+                    g_error(j->it, ERR_JSON_PARSE, "bad escape");
+                }
                 unsigned code = (unsigned)strtoul(j->p + 1, NULL, 16);
                 j->p += 5;
-                if (code >= 0xD800 && code <= 0xDBFF && j->p[0] == '\\' && j->p[1] == 'u') {
+                if (code >= 0xD800 && code <= 0xDBFF && j->p[0] == '\\' && j->p[1] == 'u'
+                    && j->p[2] && j->p[3] && j->p[4] && j->p[5]) {
                     unsigned lo = (unsigned)strtoul(j->p + 2, NULL, 16);
                     code = 0x10000 + ((code - 0xD800) << 10) + (lo - 0xDC00);
                     j->p += 6;
@@ -2367,6 +2389,9 @@ static int db_unesc(const char **p, GB *out) {
         case '"': gb_ch(out, '"'); s++; break;
         case '\\': gb_ch(out, '\\'); s++; break;
         case 'u': {                                  /* the writer escapes only < 0x20 */
+            /* a cut off escape must not read past the terminator: each test
+             * proves the next byte is still inside the text */
+            if (!s[1] || !s[2] || !s[3] || !s[4]) return 0;
             char hx[5] = { s[1], s[2], s[3], s[4], 0 };
             gb_ch(out, (char)strtoul(hx, NULL, 16));
             s += 5;
@@ -2406,7 +2431,10 @@ static int db_load(Db *db, const char *text, const char **why) {
             cur->seq = scan_int(&p);
             db_skip_sp(&p);
             cur->autoinc = (int)scan_int(&p);
-        } else if (kind == 'C' && cur) {
+        /* every C line comes before the table's R lines, as db_save writes them.
+         * A C line after a row would leave that row's cells array short of
+         * t->ncols, and every later read of it runs off the allocation. */
+        } else if (kind == 'C' && cur && !cur->nrows) {
             GB nb; gb_init(&nb);
             if (!db_unesc(&p, &nb)) { free(nb.p); *why = "file is not a database"; return 0; }
             db_skip_sp(&p);
@@ -3935,6 +3963,14 @@ static void write_all(int fd, const char *p, size_t n) {
     }
 }
 
+/* a header a route built out of its own request data must not be able to end the
+ * header block: a CR or LF in there opens a second, attacker written response
+ * (splitting).  No legitimate header carries one, so drop them. */
+static void gb_hdr(GB *b, Str *s) {
+    for (uint32_t i = 0; i < s->len; i++)
+        if (s->data[i] != '\r' && s->data[i] != '\n') gb_ch(b, s->data[i]);
+}
+
 static void srv_send(int fd, int code, Dict *headers, Dict *setcookie,
                      const char *body, size_t blen) {
     GB b; gb_init(&b);
@@ -3943,9 +3979,9 @@ static void srv_send(int fd, int code, Dict *headers, Dict *setcookie,
     gb_cz(&b, line);
     if (headers)
         for (long i = 0; i < headers->n; i++) {
-            gb_str(&b, v_stringify(headers->items[i].key));
+            gb_hdr(&b, v_stringify(headers->items[i].key));
             gb_cz(&b, ": ");
-            gb_str(&b, v_stringify(headers->items[i].val));
+            gb_hdr(&b, v_stringify(headers->items[i].val));
             gb_cz(&b, "\r\n");
         }
     if (setcookie)
@@ -3988,7 +4024,9 @@ static void srv_send_html(int fd, int code, const char *prefix, Str *tail) {
     dict_set(h, v_str(str_from("Content-Type")), v_str(str_from(SRV_HTML)));
     GB b; gb_init(&b);
     gb_cz(&b, prefix);
-    if (tail) gb_str(&b, tail);
+    /* the tail is the request path / method / error text and this page is
+     * text/html: unescaped it makes every route's 404 a reflected xss */
+    if (tail) gb_str(&b, html_escape(v_str(tail)));
     srv_send(fd, code, h, NULL, b.p, b.n);
     free(b.p);
 }
@@ -4019,6 +4057,9 @@ static char *srv_read_request(int fd, size_t *hdrend_out, size_t *total_out) {
         ssize_t got = read(fd, tmp, sizeof tmp);
         if (got <= 0) break;
         gb_put(&b, tmp, (size_t)got);
+        /* Content-Length is the client's word: without the ceiling the header
+         * loop already has, one request streams us out of memory */
+        if (b.n > (16u << 20)) { free(b.p); return NULL; }
     }
     *hdrend_out = hdrend;
     *total_out = b.n;
