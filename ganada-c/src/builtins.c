@@ -4295,7 +4295,15 @@ static Value b_server(Interp *it, Value *args, int n) {
             if (errno == EINTR) continue;
             break;
         }
-        struct timeval tv = { 30, 0 };                   /* a stalled peer must not wedge us */
+        /* 한 번에 한 연결만 처리한다 — 파이썬 참조 구현(http.server.HTTPServer,
+         * 스레드 없음)과 같은 설계고, 손으로 쓴 C 서버에 스레드·다중화를 넣는 것은
+         * 얻는 것보다 위험이 크다. 그래서 조용한 연결 하나가 다음 요청을 이 시간만큼
+         * 막는다. 30초는 브라우저의 예비 연결(preconnect) 하나만으로도 체감이 되므로
+         * 5초로 줄인다 — 읽기 한 번당 5초이니 정상 요청(로컬·LAN)은 넉넉하다.
+         * 남는 한계: 5초보다 자주 1바이트씩 흘려보내는 상대는 계속 붙어 있을 수 있고
+         * (총 시한이 아니라 읽기별 시한이다), 응답을 읽어가지 않는 상대는 write 에서
+         * 기다린다(보내기 시한은 큰 정적 파일 전송을 끊을 위험이 있어 두지 않았다). */
+        struct timeval tv = { 5, 0 };                    /* a stalled peer must not wedge us */
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
         rethrow = srv_one(it, fd, routes, staticdir);
         close(fd);
