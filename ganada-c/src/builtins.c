@@ -629,7 +629,18 @@ static void round_half_up(const char *in, int64_t digits, char *out, size_t cap)
         /* else zero */
     } else if (c >= m) {
         /* keep all significant digits + pad zeros (nk == c, else 10^-digits scale breaks) */
-        if (c > 120) c = 120;
+        if (c > 120) {
+            /* c 를 120 으로 자르면 nk == c 가 깨져 결과가 10^(c-120) 만큼 어긋난다
+             * (반올림(1.5, 200) 이 1.5e-81 로 나오던 원인). c >= m 은 반올림 자리가
+             * 입력의 최하위 자리보다 아래라는 뜻이므로 값은 그대로다 — 유효숫자를
+             * 지수형으로 그대로 적는다. value = 0.D x 10^E = D x 10^(E-m).
+             * m <= 120 이라 부호 1 + m + 지수 22 < cap(160). */
+            char *ov = out;
+            if (neg) *ov++ = '-';
+            memcpy(ov, dig + lead, (size_t)m); ov += m;
+            snprintf(ov, cap - (size_t)(ov - out), "e%lld", (long long)(E - m));
+            return;
+        }
         memcpy(kept, dig + lead, m);
         memset(kept + m, '0', (size_t)(c - m));
         nk = (int)c;
