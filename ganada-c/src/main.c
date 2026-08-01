@@ -326,14 +326,222 @@ static void repl(void) {
     free(hist.items);
 }
 
+/* CLI 한글 명령 (UTF-8 바이트) */
+#define CMD_COMPILE_KO "\xEC\xBB\xB4\xED\x8C\x8C\xEC\x9D\xBC"   /* 컴파일 */
+#define CMD_BUILD_KO   "\xEB\xB9\x8C\xEB\x93\x9C"               /* 빌드 */
+#define CMD_NA_KO      "\xEB\x82\x98"                           /* 나 */
+#define CMD_DOLRIGI_KO "\xEB\x8F\x8C\xEB\xA6\xAC\xEA\xB8\xB0"   /* 돌리기 */
+#define CMD_RUN_KO     "\xEC\x8B\xA4\xED\x96\x89"               /* 실행 */
+#define CMD_REPL_KO    "\xEB\x8C\x80\xED\x99\x94"               /* 대화 */
+
+/* Path to na_rt.c for linking native user programs (not into ganada itself). */
+static char g_argv0[4096];
+
+static int find_na_rt(char *out, size_t outsz) {
+    /* 1) <dir(argv0)>/src/na_rt.c  (dev: ganada-c/ganada → ganada-c/src/na_rt.c) */
+    if (g_argv0[0]) {
+        char resolved[4096];
+        if (realpath(g_argv0, resolved)) {
+            char *slash = strrchr(resolved, '/');
+            if (slash) {
+                *slash = 0;
+                snprintf(out, outsz, "%s/src/na_rt.c", resolved);
+                if (access(out, R_OK) == 0) return 0;
+            }
+        }
+        char tmp[4096];
+        snprintf(tmp, sizeof tmp, "%s", g_argv0);
+        char *slash = strrchr(tmp, '/');
+        if (slash) {
+            *slash = 0;
+            snprintf(out, outsz, "%s/src/na_rt.c", tmp);
+            if (access(out, R_OK) == 0) return 0;
+        }
+    }
+    /* 2) cwd-relative fallbacks */
+    static const char *cands[] = { "src/na_rt.c", "ganada-c/src/na_rt.c", NULL };
+    for (int i = 0; cands[i]; i++) {
+        if (access(cands[i], R_OK) == 0) {
+            snprintf(out, outsz, "%s", cands[i]);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+/* LLVM 경로 모드:
+ *   IR=IR만 / BUILD=바이너리 / RUN=바이너리+실행(실패 시 하드 에러)
+ *   TRY_RUN=실행 경로용: emit/clang 실패 시 2 반환 → 호출측이 인터프리터로 폴백
+ * 반환: 0 성공, 1 하드 실패, 2 soft(TRY_RUN only · 폴백 가능) */
+enum { LLVM_IR = 0, LLVM_BUILD = 1, LLVM_RUN = 2, LLVM_TRY_RUN = 3 };
+
+static int compile_llvm(const char *path, int mode) {
+    int try_mode = (mode == LLVM_TRY_RUN);
+    char *src = read_file_utf8(path);
+    if (!src) {
+        fprintf(stderr, "파일을 열 수 없습니다: %s\n", path);
+        return 1;
+    }
+    Interp *it = interp_new();
+    char *err = NULL;
+    Node *root = NULL;
+    /* parse via run path internals: lex + parse with error capture */
+    Handler h;
+    h.prev = it->top; it->top = &h;
+    int code = _setjmp(h.jb);
+    if (code == 0) {
+        int ntoks = 0;
+        Tok *toks = lex_all(it, src, &ntoks);
+        root = parse_all(it, toks);
+        it->top = h.prev;
+    } else {
+        it->top = h.prev;
+        if (it->err) {
+            char *shown = attach_source_line(it->err, src);
+            fprintf(stderr, "오류: %s\n", shown);
+            free(it->err); it->err = NULL;
+        }
+        free(src);
+        return 1; /* 구문 오류 — 인터프리터도 동일 실패 */
+    }
+    char *ir = llvm_emit_module(it, root, &err);
+    if (!ir) {
+        if (try_mode) {
+            free(err);
+            free(src);
+            return 2; /* 미지원 기능 → 폴백 */
+        }
+        fprintf(stderr, "LLVM: %s\n", err ? err : "코드 생성 실패");
+        free(err);
+        free(src);
+        return 1;
+    }
+
+    char outll[4096];
+    char outbin[4096];
+    if (try_mode) {
+        /* 실행 폴백 경로: 소스 옆 파일을 오염시키지 않도록 임시 경로 */
+        snprintf(outll, sizeof outll, "/tmp/ganada_run_%d.ll", (int)getpid());
+        snprintf(outbin, sizeof outbin, "/tmp/ganada_run_%d.native", (int)getpid());
+    } else {
+        snprintf(outll, sizeof outll, "%s.ll", path);
+        snprintf(outbin, sizeof outbin, "%s.native", path);
+    }
+    FILE *f = fopen(outll, "w");
+    if (!f) {
+        if (try_mode) {
+            free(ir); free(src);
+            return 2;
+        }
+        fprintf(stderr, "쓸 수 없음: %s\n", outll);
+        free(ir); free(src);
+        return 1;
+    }
+    fputs(ir, f);
+    fclose(f);
+    if (!try_mode)
+        fprintf(stderr, "LLVM IR → %s\n", outll);
+
+    if (mode == LLVM_IR) {
+        free(ir);
+        free(src);
+        return 0;
+    }
+
+    /* 빌드/나/TRY: clang links IR + na_rt.c (prints, string concat). */
+    char nart[4096];
+    if (find_na_rt(nart, sizeof nart) != 0) {
+        if (try_mode) {
+            unlink(outll);
+            free(ir); free(src);
+            return 2;
+        }
+        fprintf(stderr, "LLVM: na_rt.c 를 찾을 수 없습니다 (ganada-c/src/na_rt.c)\n");
+        free(ir); free(src);
+        return 1;
+    }
+    char cmd[12288];
+    /* TRY: clang 진단은 삼키고, 실패 시 인터프리터로 조용히 폴백 */
+    if (try_mode)
+        snprintf(cmd, sizeof cmd, "clang -O2 -o %s %s %s >/dev/null 2>&1", outbin, outll, nart);
+    else {
+        snprintf(cmd, sizeof cmd, "clang -O2 -o %s %s %s 2>&1", outbin, outll, nart);
+        fprintf(stderr, "clang → %s (+ na_rt)\n", outbin);
+    }
+    int rc = system(cmd);
+    if (rc != 0) {
+        if (try_mode) {
+            unlink(outll);
+            unlink(outbin);
+            free(ir); free(src);
+            return 2;
+        }
+        fprintf(stderr, "clang 링크 실패 (rc=%d)\n", rc);
+        free(ir); free(src);
+        return 1;
+    }
+    if (mode == LLVM_BUILD) {
+        fprintf(stderr, "네이티브 바이너리 → %s\n", outbin);
+        free(ir); free(src);
+        return 0;
+    }
+    /* LLVM_RUN / LLVM_TRY_RUN: 바로 실행 (프로그램 종료코드는 폴백 사유 아님) */
+    snprintf(cmd, sizeof cmd, "%s", outbin);
+    rc = system(cmd);
+    if (try_mode) {
+        unlink(outll);
+        unlink(outbin);
+    }
+    free(ir); free(src);
+    return rc ? 1 : 0;
+}
+
+/* 실행/run: 네이티브 시도 → 실패 시 인터프리터. env 탈출구 지원. */
+static int run_smart(const char *path) {
+    const char *fi = getenv("GANADA_FORCE_INTERP");
+    const char *fl = getenv("GANADA_FORCE_LLVM");
+    if (fi && fi[0] == '1' && fi[1] == '\0')
+        return run_file(path);
+    if (fl && fl[0] == '1' && fl[1] == '\0')
+        return compile_llvm(path, LLVM_RUN); /* 네이티브만, 실패 시 하드 에러 */
+    int rc = compile_llvm(path, LLVM_TRY_RUN);
+    if (rc == 2) {
+        fprintf(stderr, "LLVM 미지원 → 인터프리터\n");
+        return run_file(path);
+    }
+    return rc;
+}
+
 int main(int argc, char **argv) {
     gc_init(__builtin_frame_address(0));    /* high end of the stack to scan */
-    if (argc >= 3 && (!strcmp(argv[1], "run") || !strcmp(argv[1], "\xEC\x8B\xA4\xED\x96\x89")))
-        return run_file(argv[2]);
-    if (argc == 1 || (argc == 2 && (!strcmp(argv[1], "repl") || !strcmp(argv[1], "\xEB\x8C\x80\xED\x99\x94")))) {
+    if (argv[0]) {
+        strncpy(g_argv0, argv[0], sizeof g_argv0 - 1);
+        g_argv0[sizeof g_argv0 - 1] = 0;
+    }
+    /* 실행/run — 네이티브 우선, 미지원 시 인터프리터 폴백 */
+    if (argc >= 3 && (!strcmp(argv[1], "run") || !strcmp(argv[1], CMD_RUN_KO)))
+        return run_smart(argv[2]);
+    /* 나(LLVM) 경로 — 명시적: 빌드=바이너리, 나/llvm/돌리기=빌드+실행, 컴파일=IR만 (폴백 없음) */
+    if (argc >= 3 && (!strcmp(argv[1], "compile") || !strcmp(argv[1], CMD_COMPILE_KO)))
+        return compile_llvm(argv[2], LLVM_IR);
+    if (argc >= 3 && (!strcmp(argv[1], "build") || !strcmp(argv[1], CMD_BUILD_KO)))
+        return compile_llvm(argv[2], LLVM_BUILD);
+    if (argc >= 3 && (!strcmp(argv[1], "llvm") || !strcmp(argv[1], CMD_NA_KO)
+                      || !strcmp(argv[1], CMD_DOLRIGI_KO)))
+        return compile_llvm(argv[2], LLVM_RUN);
+    if (argc == 1 || (argc == 2 && (!strcmp(argv[1], "repl") || !strcmp(argv[1], CMD_REPL_KO)))) {
         repl();
         return 0;
     }
     fprintf(stderr, "%s\n", STR_USAGE);
+    fprintf(stderr, "\n권장(네이티브 · 나 경로, clang 필요):\n");
+    fprintf(stderr, "  가나다 빌드  파일.ㄱㄴㄷ   → LLVM IR + 네이티브 바이너리 (.native)\n");
+    fprintf(stderr, "  가나다 나    파일.ㄱㄴㄷ   → 빌드 후 바로 실행 (별칭: llvm, 돌리기)\n");
+    fprintf(stderr, "  가나다 컴파일 파일.ㄱㄴㄷ  → LLVM IR (.ll) 만\n");
+    fprintf(stderr, "\n실행(네이티브 우선 · 폴백):\n");
+    fprintf(stderr, "  가나다 실행  파일.ㄱㄴㄷ   → LLVM 시도, 미지원 시 인터프리터 (별칭: run)\n");
+    fprintf(stderr, "  가나다 대화               → REPL\n");
+    fprintf(stderr, "  GANADA_FORCE_INTERP=1     → 항상 인터프리터\n");
+    fprintf(stderr, "  GANADA_FORCE_LLVM=1       → 네이티브만 (실패 시 오류)\n");
     return 2;
 }

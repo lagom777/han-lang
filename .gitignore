@@ -6,3 +6,5 @@ __pycache__/
 ganada-c/ganada
 ganada-c/*.o
 ganada-c/src/*.o
+.env
+node_modules/

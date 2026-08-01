@@ -1,7 +1,10 @@
 CC ?= clang
 CFLAGS ?= -O2 -std=c11 -Wall -Wno-unused-function
-SRCS = src/main.c src/value.c src/lexer.c src/parser.c src/interp.c src/builtins.c src/gc.c
-HDRS = src/ganada.h src/tables.h
+# Interpreter + LLVM codegen. na_rt.c is NOT linked into ganada — only into
+# user native binaries via `가나다 llvm` (compile_llvm in main.c passes it to clang).
+SRCS = src/main.c src/value.c src/lexer.c src/parser.c src/interp.c src/builtins.c src/gc.c src/codegen_llvm.c
+HDRS = src/ganada.h src/tables.h src/na_rt.h
+NA_RT = src/na_rt.c
 
 # glibc 는 -std=c11 이면 POSIX 함수를 숨긴다(strdup·strtok_r·getline·localtime_r·
 # realpath·clock_gettime·sigaction·_longjmp·PATH_MAX…). macOS 헤더는 그냥 노출하지만
@@ -64,7 +67,11 @@ install: ganada
 uninstall:
 	rm -f $(BINDIR)/가나다 $(BINDIR)/ganada
 
+# Smoke-link na_rt against a dummy to catch API breakages (optional).
+check-na-rt: $(NA_RT) src/na_rt.h
+	$(CC) $(CFLAGS) -c -o /tmp/na_rt.o $(NA_RT)
+
 clean:
 	rm -f ganada
 
-.PHONY: clean test test-conform golden golden-check install uninstall
+.PHONY: clean test test-conform golden golden-check install uninstall check-na-rt

@@ -255,4 +255,8 @@ Value builtin_dispatch(Interp *it, int id, Value *args, int n);
 char *attach_source_line(const char *msg, const char *src);
 char *read_file_utf8(const char *path);                 /* NULL on failure */
 
+/* ---------------------------------------------------------------- LLVM IR codegen (subset) */
+/* Returns malloc'd LLVM IR module text, or NULL. On failure *errp is malloc'd message. */
+char *llvm_emit_module(Interp *it, Node *root, char **errp);
+
 #endif
