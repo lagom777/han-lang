@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""사다리(임시). 셀프호스트 후 삭제.
+가나다 .ㄱㄴㄷ → 바이트열 .ㄱㅂ
+제품 표면·확장자에 영어 없음. 이 파일 자체는 시드 사다리(호스트 파이썬)이며 정본 컴파일러가 아님.
+정본 컴파일러 목표는 컴파일러/*.ㄱㄴㄷ
+"""
+from __future__ import annotations
+import re, struct, sys
+from pathlib import Path
+
+끝, 정수넣기, 정수쓰기, 글쓰기, 더하기, 빼기, 곱하기, 나누기 = range(8)
+복제, 버림, 점프, 영이면점프, 꺼내기, 넣기 = range(8, 14)
+
+def _u8(x: int) -> bytes:
+    return bytes([x & 255])
+
+def _i64(x: int) -> bytes:
+    return struct.pack("<q", x)
+
+def _u32(x: int) -> bytes:
+    return struct.pack("<I", x)
+
+def _i32(x: int) -> bytes:
+    return struct.pack("<i", x)
+
+def 묶기(원문: str) -> bytes:
+    줄들 = []
+    for 줄 in 원문.splitlines():
+        if "#" in 줄:
+            줄 = 줄[: 줄.index("#")]
+        줄 = 줄.strip()
+        if 줄:
+            줄들.append(줄)
+    결과 = bytearray()
+    지역: dict[str, int] = {}
+
+    def 칸(이름: str) -> int:
+        if 이름 not in 지역:
+            지역[이름] = len(지역)
+        return 지역[이름]
+
+    def 글출력(s: str) -> None:
+        b = s.encode("utf-8")
+        결과.extend(_u8(글쓰기))
+        결과.extend(_u32(len(b)))
+        결과.extend(b)
+
+    def 식(표현: str) -> None:
+        표현 = 표현.strip()
+        if re.fullmatch(r"-?\d+", 표현):
+            결과.extend(_u8(정수넣기))
+            결과.extend(_i64(int(표현)))
+            return
+        if re.fullmatch(r"[A-Za-z가-힣_][A-Za-z0-9가-힣_]*", 표현):
+            결과.extend(_u8(꺼내기))
+            결과.extend(_u8(칸(표현)))
+            return
+        m = re.fullmatch(
+            r"(-?\d+|[A-Za-z가-힣_][A-Za-z0-9가-힣_]*)\s*(==|\+|\-|\*|/)\s*(-?\d+|[A-Za-z가-힣_][A-Za-z0-9가-힣_]*)",
+            표현,
+        )
+        if not m:
+            raise SystemExit(f"묶기: 식 불가 {표현!r}")
+        식(m.group(1))
+        식(m.group(3))
+        op = m.group(2)
+        if op == "+":
+            결과.extend(_u8(더하기))
+        elif op == "-":
+            결과.extend(_u8(빼기))
+        elif op == "*":
+            결과.extend(_u8(곱하기))
+        elif op == "/":
+            결과.extend(_u8(나누기))
+        elif op == "==":
+            결과.extend(_u8(빼기))  # 0 이면 같음
+        else:
+            raise SystemExit(f"묶기: 연산 불가 {op}")
+
+    i = 0
+    while i < len(줄들):
+        줄 = 줄들[i]
+        m = re.fullmatch(r'출력\s*\(\s*"(.*)"\s*\)\s*', 줄)
+        if m:
+            글출력(m.group(1).replace("\\n", "\n"))
+            i += 1
+            continue
+        m = re.fullmatch(r"출력\s*\(\s*(.+)\s*\)\s*", 줄)
+        if m:
+            식(m.group(1))
+            결과.extend(_u8(정수쓰기))
+            i += 1
+            continue
+        m = re.fullmatch(r"([A-Za-z가-힣_][A-Za-z0-9가-힣_]*)\s*=\s*(.+)\s*", 줄)
+        if m:
+            식(m.group(2))
+            결과.extend(_u8(넣기))
+            결과.extend(_u8(칸(m.group(1))))
+            i += 1
+            continue
+        m = re.fullmatch(r"만약\s+(.+)\s*\{\s*", 줄)
+        if m:
+            식(m.group(1))
+            결과.extend(_u8(영이면점프))
+            jz = len(결과)
+            결과.extend(_i32(0))
+            결과.extend(_u8(점프))
+            jmp = len(결과)
+            결과.extend(_i32(0))
+            몸 = len(결과)
+            결과[jz : jz + 4] = _i32(몸 - (jz + 4))
+            i += 1
+            while i < len(줄들) and 줄들[i] != "}":
+                안 = 줄들[i]
+                mm = re.fullmatch(r'출력\s*\(\s*"(.*)"\s*\)\s*', 안)
+                if mm:
+                    글출력(mm.group(1))
+                    i += 1
+                    continue
+                mm = re.fullmatch(r"출력\s*\(\s*(.+)\s*\)\s*", 안)
+                if mm:
+                    식(mm.group(1))
+                    결과.extend(_u8(정수쓰기))
+                    i += 1
+                    continue
+                mm = re.fullmatch(r"([A-Za-z가-힣_][A-Za-z0-9가-힣_]*)\s*=\s*(.+)\s*", 안)
+                if mm:
+                    식(mm.group(2))
+                    결과.extend(_u8(넣기))
+                    결과.extend(_u8(칸(mm.group(1))))
+                    i += 1
+                    continue
+                raise SystemExit(f"묶기: 만약 몸 불가 {안!r}")
+            if i >= len(줄들) or 줄들[i] != "}":
+                raise SystemExit("묶기: } 없음")
+            i += 1
+            끝위치 = len(결과)
+            결과[jmp : jmp + 4] = _i32(끝위치 - (jmp + 4))
+            continue
+        raise SystemExit(f"묶기: 문장 불가 {줄!r}")
+    결과.extend(_u8(끝))
+    return bytes(결과)
+
+def main() -> None:
+    if len(sys.argv) != 3:
+        print("쓰임: 묶기 입력.ㄱㄴㄷ 출력.ㄱㅂ", file=sys.stderr)
+        sys.exit(2)
+    원 = Path(sys.argv[1]).read_text(encoding="utf-8")
+    바 = 묶기(원)
+    Path(sys.argv[2]).write_bytes(바)
+    print(f"씀 {sys.argv[2]} ({len(바)} 바이트)", file=sys.stderr)
+
+if __name__ == "__main__":
+    main()

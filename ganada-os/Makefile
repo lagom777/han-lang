@@ -1,42 +1,47 @@
-# 가나다 OS / 언어 — C 소스 없음. 호스트 검증용 aarch64 어셈블리 VM.
-# 제품 목표: 베어메탈 OS (리눅스 사용자공간 아님). 지금은 macOS 호스트에서 VM만 검증.
+# 가나다 — 숫자 시드 + 한글. 제품 표면 영어 없음.
+# 확장자: .ㄱㄴㄷ(소스) .ㄱㅂ(바이트) .기대(골든)
+# 실행기: 가상
 
-ARCH ?= arm64
-AS ?= as
-LD ?= ld
+아치 ?= arm64
+조립 ?= as
+연결 ?= ld
 SDK ?= $(shell xcrun --show-sdk-path 2>/dev/null)
-PYTHON ?= python3
+파이썬 ?= python3
 
-GVM = gvm
-ASM = kernel/vm_host.s
-OBJ = build/vm_host.o
+가상 = 가상
+시드조립 = 시드/가상.s
+시드물체 = 산출/가상.o
 
-TESTS_SRC = tests/hello.ㄱㄴㄷ tests/arith.ㄱㄴㄷ tests/vars.ㄱㄴㄷ tests/if.ㄱㄴㄷ
-TESTS_GBC = $(TESTS_SRC:tests/%.ㄱㄴㄷ=build/%.gbc)
+검사목록 = 인사 셈 변수 조건
+바이트들 = $(검사목록:%=산출/%.ㄱㅂ)
 
-.PHONY: all test clean dirs
+.PHONY: 모두 검사 청소 디렉
 
-all: dirs $(GVM)
+모두: 디렉 $(가상)
 
-dirs:
-	@mkdir -p build
+디렉:
+	@mkdir -p 산출
 
-$(OBJ): $(ASM) | dirs
-	$(AS) -arch $(ARCH) -o $@ $(ASM)
+$(시드물체): $(시드조립) | 디렉
+	$(조립) -arch $(아치) -o $@ $(시드조립)
 
-$(GVM): $(OBJ)
-	$(LD) -arch $(ARCH) -e _main -o $@ $(OBJ) -lSystem -syslibroot $(SDK)
+$(가상): $(시드물체)
+	$(연결) -arch $(아치) -e _main -o $@ $(시드물체) -lSystem -syslibroot $(SDK)
 
-build/%.gbc: tests/%.ㄱㄴㄷ bootstrap/gbcpack.py | dirs
-	$(PYTHON) bootstrap/gbcpack.py $< $@
+산출/%.ㄱㅂ: 검사/%.ㄱㄴㄷ 사다리/묶기 | 디렉
+	chmod +x 사다리/묶기
+	$(파이썬) 사다리/묶기 $< $@
 
-test: $(GVM) $(TESTS_GBC)
-	@set -e; for t in hello arith vars if; do \
+검사: $(가상) $(바이트들)
+	@set -e; for t in $(검사목록); do \
 	  echo "=== $$t ==="; \
-	  ./$(GVM) build/$$t.gbc | tee build/$$t.out; \
-	  diff -u tests/$$t.golden build/$$t.out; \
+	  ./$(가상) 산출/$$t.ㄱㅂ | tee 산출/$$t.결과; \
+	  diff -u 검사/$$t.기대 산출/$$t.결과; \
 	done
-	@echo "ALL P0 TESTS PASSED (C-free host VM)"
+	@echo "검사 통과 (영어 확장자 없음 · 시드=어셈블리 · 사다리=임시)"
 
-clean:
-	rm -rf build $(GVM)
+# 영문 별칭 없음 — test 같은 영어 타깃 의도적 미제공
+# 습관용: make 검사
+
+청소:
+	rm -rf 산출 $(가상)

@@ -6,9 +6,9 @@
 
 .align 3
 .data
-.msg_usage: .ascii "gvm: usage: gvm file.gbc\n"
+.msg_usage: .ascii "가상: 쓰임: 가상 파일.ㄱㅂ\n"
 .msg_usage_len = . - .msg_usage
-.msg_err:   .ascii "gvm: error\n"
+.msg_err:   .ascii "가상: 오류\n"
 .msg_err_len = . - .msg_err
 .msg_nl:    .ascii "\n"
 .digits:    .ascii "0123456789"
