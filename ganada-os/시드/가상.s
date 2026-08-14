@@ -96,6 +96,10 @@ interp:
     b.eq op_mul
     cmp w0, #7
     b.eq op_div
+    cmp w0, #8
+    b.eq op_dup
+    cmp w0, #9
+    b.eq op_drop
     cmp w0, #10
     b.eq op_jmp
     cmp w0, #11
@@ -104,6 +108,14 @@ interp:
     b.eq op_load
     cmp w0, #13
     b.eq op_store
+    cmp w0, #14
+    b.eq op_eq
+    cmp w0, #15
+    b.eq op_lt
+    cmp w0, #16
+    b.eq op_gt
+    cmp w0, #17
+    b.eq op_not
     b fail
 
 op_pushi:
@@ -174,6 +186,47 @@ op_div:
     cbz x2, fail
     bl pop
     sdiv x0, x0, x2
+    bl push
+    b interp
+
+op_dup:
+    cbz x24, fail
+    sub x1, x24, #1
+    ldr x0, [x26, x1, lsl #3]
+    bl push
+    b interp
+op_drop:
+    bl pop
+    b interp
+
+op_eq:
+    bl pop
+    mov x2, x0
+    bl pop
+    cmp x0, x2
+    cset x0, eq
+    bl push
+    b interp
+op_lt:
+    bl pop
+    mov x2, x0
+    bl pop
+    cmp x0, x2
+    cset x0, lt
+    bl push
+    b interp
+op_gt:
+    bl pop
+    mov x2, x0
+    bl pop
+    cmp x0, x2
+    cset x0, gt
+    bl push
+    b interp
+op_not:
+    bl pop
+    cmp x0, #0
+    cset x0, eq
     bl push
     b interp
 
