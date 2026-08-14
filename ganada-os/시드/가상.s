@@ -17,8 +17,11 @@
 .comm code_buf, 65536, 3
 // stack of i64, 4096 slots
 .comm vstack, 32768, 3
-// locals 256 * 8
-.comm locals, 2048, 3
+// 칸 512*8 (막 16 × 32칸)
+.comm locals, 4096, 3
+.comm cstack, 256, 3
+.comm pathbuf, 1024, 3
+.comm onebyte, 8, 3
 // print number buffer
 .comm numbuf, 32, 3
 
@@ -72,6 +75,9 @@ _main:
     add x26, x26, vstack@PAGEOFF
     adrp x27, locals@PAGE
     add x27, x27, locals@PAGEOFF
+    mov x19, #0          // call_n
+    mov x20, #0          // frame base
+    mov x21, #32         // lsp
 
 // interpreter loop
 interp:
@@ -116,6 +122,22 @@ interp:
     b.eq op_gt
     cmp w0, #17
     b.eq op_not
+    cmp w0, #18
+    b.eq op_mod
+    cmp w0, #19
+    b.eq op_call
+    cmp w0, #20
+    b.eq op_ret
+    cmp w0, #21
+    b.eq op_openr
+    cmp w0, #22
+    b.eq op_openw
+    cmp w0, #23
+    b.eq op_getc
+    cmp w0, #24
+    b.eq op_putc
+    cmp w0, #25
+    b.eq op_close
     b fail
 
 op_pushi:
@@ -249,8 +271,10 @@ op_jz:
 op_load:
     ldrb w0, [x25, x23]
     add x23, x23, #1
-    // locals[slot]
     uxtw x0, w0
+    cmp x0, #32
+    b.hs fail
+    add x0, x0, x20
     ldr x0, [x27, x0, lsl #3]
     bl push
     b interp
@@ -260,8 +284,131 @@ op_store:
     add x23, x23, #1
     bl pop
     uxtw x1, w1
+    cmp x1, #32
+    b.hs fail
+    add x1, x1, x20
     str x0, [x27, x1, lsl #3]
     b interp
+
+op_mod:
+    bl pop
+    mov x2, x0
+    cbz x2, fail
+    bl pop
+    sdiv x3, x0, x2
+    msub x0, x3, x2, x0
+    bl push
+    b interp
+
+op_call:
+    add x1, x25, x23
+    ldrsw x2, [x1]
+    add x23, x23, #4
+    cmp x19, #16
+    b.ge fail
+    adrp x3, cstack@PAGE
+    add x3, x3, cstack@PAGEOFF
+    lsl x4, x19, #4
+    str x23, [x3, x4]
+    add x5, x3, x4
+    str x20, [x5, #8]
+    add x19, x19, #1
+    mov x20, x21
+    add x21, x21, #32
+    cmp x21, #512
+    b.gt fail
+    add x23, x23, x2
+    b interp
+
+op_ret:
+    cbz x19, halt_ok
+    sub x19, x19, #1
+    adrp x3, cstack@PAGE
+    add x3, x3, cstack@PAGEOFF
+    lsl x4, x19, #4
+    mov x21, x20
+    ldr x23, [x3, x4]
+    add x5, x3, x4
+    ldr x20, [x5, #8]
+    b interp
+
+op_openr:
+    bl copy_path
+    mov x1, #0
+    mov x2, #0
+    bl sys_open
+    cmp x0, #0
+    b.lt fail
+    bl push
+    b interp
+
+op_openw:
+    bl copy_path
+    // O_WRONLY|O_CREAT|O_TRUNC = 1 | 0x200 | 0x400
+    mov x1, #0x601
+    mov x2, #420
+    bl sys_open
+    cmp x0, #0
+    b.lt fail
+    bl push
+    b interp
+
+op_getc:
+    bl pop
+    adrp x1, onebyte@PAGE
+    add x1, x1, onebyte@PAGEOFF
+    mov x2, #1
+    bl sys_read
+    cmp x0, #1
+    b.eq 1f
+    mov x0, #-1
+    bl push
+    b interp
+1:
+    adrp x1, onebyte@PAGE
+    add x1, x1, onebyte@PAGEOFF
+    ldrb w0, [x1]
+    bl push
+    b interp
+
+op_putc:
+    bl pop
+    adrp x1, onebyte@PAGE
+    add x1, x1, onebyte@PAGEOFF
+    strb w0, [x1]
+    bl pop
+    mov x2, #1
+    bl sys_write
+    cmp x0, #1
+    b.ne fail
+    b interp
+
+op_close:
+    bl pop
+    bl sys_close
+    b interp
+
+copy_path:
+    add x1, x25, x23
+    ldr w2, [x1]
+    add x23, x23, #4
+    cmp x2, #1023
+    b.hi fail
+    adrp x0, pathbuf@PAGE
+    add x0, x0, pathbuf@PAGEOFF
+    add x3, x25, x23
+    add x23, x23, x2
+    mov x4, #0
+1:
+    cmp x4, x2
+    b.eq 2f
+    ldrb w5, [x3, x4]
+    strb w5, [x0, x4]
+    add x4, x4, #1
+    b 1b
+2:
+    strb wzr, [x0, x4]
+    ret
 
 // push x0
 push:

@@ -1,6 +1,5 @@
 # 가나다 가상 — 리눅스 x86_64 시드
-# C 없음. 시스템호출만 (읽기/쓰기/열기/닫기/끝내기).
-# 값·명령·칸은 숫자. 기호는 묶기가 이 숫자로 바꾼다.
+# C 없음. 시스템호출만. 점프표 + 스택 인라인.
 
         .intel_syntax noprefix
         .global _start
@@ -12,9 +11,15 @@ code_buf:
 vstack:
         .space 32768
 locals:
-        .space 2048
+        .space 4096
+cstack:
+        .space 256
+pathbuf:
+        .space 1024
 numbuf:
         .space 32
+onebyte:
+        .space 8
 
         .data
 msg_usage:
@@ -29,6 +34,36 @@ digits:
         .ascii "0123456789"
 
         .text
+        .align 8
+optable:
+        .quad op_halt
+        .quad op_pushi
+        .quad op_printi
+        .quad op_prints
+        .quad op_add
+        .quad op_sub
+        .quad op_mul
+        .quad op_div
+        .quad op_dup
+        .quad op_drop
+        .quad op_jmp
+        .quad op_jz
+        .quad op_load
+        .quad op_store
+        .quad op_eq
+        .quad op_lt
+        .quad op_gt
+        .quad op_not
+        .quad op_mod
+        .quad op_call
+        .quad op_ret
+        .quad op_openr
+        .quad op_openw
+        .quad op_getc
+        .quad op_putc
+        .quad op_close
+        .equ OP_MAX, 25
+
 _start:
         mov rax, [rsp]
         cmp rax, 2
@@ -41,7 +76,6 @@ _start:
         mov rax, 60
         mov rdi, 2
         syscall
-
 1:
         mov rdi, [rsp + 16]
         mov rax, 2
@@ -51,7 +85,6 @@ _start:
         cmp rax, 0
         jl fail
         mov r8, rax
-
         mov rax, 0
         mov rdi, r8
         lea rsi, [rip + code_buf]
@@ -60,7 +93,6 @@ _start:
         cmp rax, 0
         jle fail
         mov r9, rax
-
         mov rax, 3
         mov rdi, r8
         syscall
@@ -70,58 +102,38 @@ _start:
         lea r14, [rip + code_buf]
         lea r15, [rip + vstack]
         lea rbx, [rip + locals]
+        xor rbp, rbp
+        mov r10, 32
+        xor r8, r8
 
+        .p2align 4
 interp:
         cmp r12, r9
         jge halt_ok
         movzx eax, byte ptr [r14 + r12]
         inc r12
-        cmp eax, 0
-        je halt_ok
-        cmp eax, 1
-        je op_pushi
-        cmp eax, 2
-        je op_printi
-        cmp eax, 3
-        je op_prints
-        cmp eax, 4
-        je op_add
-        cmp eax, 5
-        je op_sub
-        cmp eax, 6
-        je op_mul
-        cmp eax, 7
-        je op_div
-        cmp eax, 8
-        je op_dup
-        cmp eax, 9
-        je op_drop
-        cmp eax, 10
-        je op_jmp
-        cmp eax, 11
-        je op_jz
-        cmp eax, 12
-        je op_load
-        cmp eax, 13
-        je op_store
-        cmp eax, 14
-        je op_eq
-        cmp eax, 15
-        je op_lt
-        cmp eax, 16
-        je op_gt
-        cmp eax, 17
-        je op_not
-        jmp fail
+        cmp eax, OP_MAX
+        ja fail
+        lea rcx, [rip + optable]
+        jmp qword ptr [rcx + rax*8]
+
+op_halt:
+        jmp halt_ok
 
 op_pushi:
         mov rax, [r14 + r12]
         add r12, 8
-        call push
+        cmp r13, 4096
+        jge fail
+        mov [r15 + r13*8], rax
+        inc r13
         jmp interp
 
 op_printi:
-        call pop
+        test r13, r13
+        jz fail
+        dec r13
+        mov rax, [r15 + r13*8]
         call print_i64
         mov rax, 1
         mov rdi, 1
@@ -149,45 +161,80 @@ op_prints:
         jmp interp
 
 op_add:
-        call pop
-        mov rcx, rax
-        call pop
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
         add rax, rcx
-        call push
+        mov [r15 + r13*8], rax
+        inc r13
         jmp interp
 op_sub:
-        call pop
-        mov rcx, rax
-        call pop
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
         sub rax, rcx
-        call push
+        mov [r15 + r13*8], rax
+        inc r13
         jmp interp
 op_mul:
-        call pop
-        mov rcx, rax
-        call pop
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
         imul rax, rcx
-        call push
+        mov [r15 + r13*8], rax
+        inc r13
         jmp interp
 op_div:
-        call pop
-        mov rcx, rax
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
         test rcx, rcx
         jz fail
-        call pop
+        dec r13
+        mov rax, [r15 + r13*8]
         cqo
         idiv rcx
-        call push
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+op_mod:
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        test rcx, rcx
+        jz fail
+        dec r13
+        mov rax, [r15 + r13*8]
+        cqo
+        idiv rcx
+        mov [r15 + r13*8], rdx
+        inc r13
         jmp interp
 
 op_dup:
         test r13, r13
         jz fail
         mov rax, [r15 + r13*8 - 8]
-        call push
+        cmp r13, 4096
+        jge fail
+        mov [r15 + r13*8], rax
+        inc r13
         jmp interp
 op_drop:
-        call pop
+        test r13, r13
+        jz fail
+        dec r13
         jmp interp
 
 op_jmp:
@@ -198,80 +245,212 @@ op_jmp:
 op_jz:
         movsx rcx, dword ptr [r14 + r12]
         add r12, 4
-        call pop
+        test r13, r13
+        jz fail
+        dec r13
+        mov rax, [r15 + r13*8]
         test rax, rax
         jnz interp
         add r12, rcx
         jmp interp
 
 op_load:
-        movzx eax, byte ptr [r14 + r12]
-        inc r12
-        mov rax, [rbx + rax*8]
-        call push
-        jmp interp
-op_store:
         movzx ecx, byte ptr [r14 + r12]
         inc r12
-        call pop
-        mov [rbx + rcx*8], rax
-        jmp interp
-
-op_eq:
-        call pop
-        mov rcx, rax
-        call pop
-        xor rdx, rdx
-        cmp rax, rcx
-        sete dl
-        mov rax, rdx
-        call push
-        jmp interp
-op_lt:
-        call pop
-        mov rcx, rax
-        call pop
-        xor rdx, rdx
-        cmp rax, rcx
-        setl dl
-        mov rax, rdx
-        call push
-        jmp interp
-op_gt:
-        call pop
-        mov rcx, rax
-        call pop
-        xor rdx, rdx
-        cmp rax, rcx
-        setg dl
-        mov rax, rdx
-        call push
-        jmp interp
-op_not:
-        call pop
-        test rax, rax
-        setz al
-        movzx rax, al
-        call push
-        jmp interp
-
-push:
+        cmp ecx, 32
+        jae fail
+        add rcx, rbp
+        mov rax, [rbx + rcx*8]
         cmp r13, 4096
         jge fail
         mov [r15 + r13*8], rax
         inc r13
-        ret
-
-pop:
+        jmp interp
+op_store:
+        movzx ecx, byte ptr [r14 + r12]
+        inc r12
+        cmp ecx, 32
+        jae fail
         test r13, r13
         jz fail
         dec r13
         mov rax, [r15 + r13*8]
+        add rcx, rbp
+        mov [rbx + rcx*8], rax
+        jmp interp
+
+op_eq:
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
+        xor rdx, rdx
+        cmp rax, rcx
+        sete dl
+        mov [r15 + r13*8], rdx
+        inc r13
+        jmp interp
+op_lt:
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
+        xor rdx, rdx
+        cmp rax, rcx
+        setl dl
+        mov [r15 + r13*8], rdx
+        inc r13
+        jmp interp
+op_gt:
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
+        xor rdx, rdx
+        cmp rax, rcx
+        setg dl
+        mov [r15 + r13*8], rdx
+        inc r13
+        jmp interp
+op_not:
+        test r13, r13
+        jz fail
+        mov rax, [r15 + r13*8 - 8]
+        test rax, rax
+        setz al
+        movzx rax, al
+        mov [r15 + r13*8 - 8], rax
+        jmp interp
+
+op_call:
+        movsx rax, dword ptr [r14 + r12]
+        add r12, 4
+        cmp r8, 16
+        jge fail
+        mov rcx, r8
+        shl rcx, 4
+        lea rdx, [rip + cstack]
+        mov [rdx + rcx], r12
+        mov [rdx + rcx + 8], rbp
+        inc r8
+        mov rbp, r10
+        add r10, 32
+        cmp r10, 512
+        jg fail
+        add r12, rax
+        jmp interp
+
+op_ret:
+        test r8, r8
+        jz halt_ok
+        dec r8
+        mov rcx, r8
+        shl rcx, 4
+        lea rdx, [rip + cstack]
+        mov r10, rbp
+        mov r12, [rdx + rcx]
+        mov rbp, [rdx + rcx + 8]
+        jmp interp
+
+op_openr:
+        call copy_path
+        mov rax, 2
+        lea rdi, [rip + pathbuf]
+        xor rsi, rsi
+        xor rdx, rdx
+        syscall
+        cmp rax, 0
+        jl fail
+        cmp r13, 4096
+        jge fail
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+
+op_openw:
+        call copy_path
+        mov rax, 2
+        lea rdi, [rip + pathbuf]
+        mov rsi, 577
+        mov rdx, 420
+        syscall
+        cmp rax, 0
+        jl fail
+        cmp r13, 4096
+        jge fail
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+
+op_getc:
+        test r13, r13
+        jz fail
+        dec r13
+        mov rdi, [r15 + r13*8]
+        mov rax, 0
+        lea rsi, [rip + onebyte]
+        mov rdx, 1
+        syscall
+        cmp rax, 1
+        je 1f
+        mov rax, -1
+        jmp 2f
+1:
+        movzx eax, byte ptr [rip + onebyte]
+2:
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+
+op_putc:
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rax, [r15 + r13*8]
+        mov byte ptr [rip + onebyte], al
+        dec r13
+        mov rdi, [r15 + r13*8]
+        mov rax, 1
+        lea rsi, [rip + onebyte]
+        mov rdx, 1
+        syscall
+        cmp rax, 1
+        jne fail
+        jmp interp
+
+op_close:
+        test r13, r13
+        jz fail
+        dec r13
+        mov rdi, [r15 + r13*8]
+        mov rax, 3
+        syscall
+        jmp interp
+
+copy_path:
+        mov ecx, dword ptr [r14 + r12]
+        add r12, 4
+        cmp ecx, 1023
+        ja fail
+        lea rdi, [rip + pathbuf]
+        lea rsi, [r14 + r12]
+        add r12, rcx
+        mov edx, ecx
+        rep movsb
+        mov byte ptr [rdi], 0
         ret
 
 print_i64:
         push rbx
         push r12
+        push r8
+        push r9
         mov r12, rax
         test r12, r12
         jnz 1f
@@ -317,6 +496,8 @@ print_i64:
         mov edx, ecx
         syscall
 9:
+        pop r9
+        pop r8
         pop r12
         pop rbx
         ret

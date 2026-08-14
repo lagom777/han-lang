@@ -3,9 +3,7 @@
 """사다리(임시). 셀프호스트 후 삭제.
 
 가나다 .ㄱㄴㄷ → 바이트열 .ㄱㅂ
-
 핵: 숫자와 기호. 한글은 이름뿐이다.
-이 파일은 호스트 파이썬 — 정본 컴파일러가 아님 (컴파일러/*.ㄱㄴㄷ).
 """
 from __future__ import annotations
 
@@ -32,8 +30,30 @@ from pathlib import Path
 작다 = 15
 크다 = 16
 아니다 = 17
+나머지 = 18
+부르기 = 19
+돌려주기 = 20
+읽기열기 = 21
+쓰기열기 = 22
+바이트읽기 = 23
+바이트쓰기 = 24
+닫기 = 25
 
-예약 = frozenset({"만약", "아니면", "동안", "출력"})
+예약 = frozenset(
+    {
+        "만약",
+        "아니면",
+        "동안",
+        "출력",
+        "묶음",
+        "돌려주기",
+        "열기",
+        "만들기",
+        "읽기",
+        "쓰기",
+        "닫기",
+    }
+)
 이름규칙 = re.compile(r"[가-힣_][가-힣0-9_]*")
 
 
@@ -61,6 +81,29 @@ class 묶기오류(SystemExit):
     pass
 
 
+def _토큰(표현: str) -> list[str]:
+    표현 = 표현.strip()
+    패턴 = re.compile(
+        r"\s*(?:(\"(?:\\.|[^\"])*\")|(==|!=|<=|>=|[+\-*/%<>()=,])|(\d+)|([가-힣A-Za-z_][가-힣A-Za-z0-9_]*))"
+    )
+    출: list[str] = []
+    pos = 0
+    while pos < len(표현):
+        m = 패턴.match(표현, pos)
+        if not m or m.end() == pos:
+            raise 묶기오류(f"묶기: 토큰 불가 {표현[pos:]!r}")
+        pos = m.end()
+        글, 기호, 수, 이름 = m.groups()
+        출.append(글 or 기호 or 수 or 이름)
+    return 출
+
+
+def _글값(토큰: str) -> str:
+    if not (토큰.startswith('"') and 토큰.endswith('"')):
+        raise 묶기오류(f"묶기: 글 아님 {토큰!r}")
+    return 토큰[1:-1].replace("\\n", "\n").replace("\\\"", '"').replace("\\\\", "\\")
+
+
 def 묶기(원문: str) -> bytes:
     줄들: list[str] = []
     for 줄 in 원문.splitlines():
@@ -70,26 +113,32 @@ def 묶기(원문: str) -> bytes:
         if 줄:
             줄들.append(줄)
 
+    본문, 묶음들 = _가르기(줄들)
     결과 = bytearray()
     지역: dict[str, int] = {}
+    호출: list[tuple[int, str]] = []
+    묶음주소: dict[str, int] = {}
 
     def 칸(이름: str) -> int:
         if not _한글이름(이름):
             raise 묶기오류(f"묶기: 이름은 한글만 ({이름!r})")
         if 이름 not in 지역:
             지역[이름] = len(지역)
-            if 지역[이름] > 255:
-                raise 묶기오류("묶기: 칸이 256을 넘음")
+            if 지역[이름] > 31:
+                raise 묶기오류("묶기: 칸이 32를 넘음")
         return 지역[이름]
 
     def 붙(op: int) -> None:
         결과.extend(_u8(op))
 
-    def 글출력(s: str) -> None:
+    def 글넣기(s: str) -> None:
         b = s.encode("utf-8")
-        붙(글쓰기)
         결과.extend(_u32(len(b)))
         결과.extend(b)
+
+    def 글출력(s: str) -> None:
+        붙(글쓰기)
+        글넣기(s)
 
     def 패치(위치: int) -> None:
         결과[위치 : 위치 + 4] = _i32(len(결과) - (위치 + 4))
@@ -127,13 +176,60 @@ def 묶기(원문: str) -> bytes:
                 비교()
                 먹기(")")
                 return
-            if re.fullmatch(r"\d+", t):
+            if t is not None and t.startswith('"'):
+                raise 묶기오류(f"묶기: 글은 열기/만들기에만 {t!r}")
+            if re.fullmatch(r"\d+", t or ""):
                 먹기()
                 붙(정수넣기)
                 결과.extend(_i64(int(t)))
                 return
-            if _한글이름(t):
+            if t in ("열기", "만들기"):
                 먹기()
+                먹기("(")
+                글 = 먹기()
+                먹기(")")
+                붙(읽기열기 if t == "열기" else 쓰기열기)
+                글넣기(_글값(글))
+                return
+            if t == "읽기":
+                먹기()
+                먹기("(")
+                비교()
+                먹기(")")
+                붙(바이트읽기)
+                return
+            if t == "쓰기":
+                먹기()
+                먹기("(")
+                비교()
+                먹기(",")
+                비교()
+                먹기(")")
+                붙(바이트쓰기)
+                return
+            if t == "닫기":
+                먹기()
+                먹기("(")
+                비교()
+                먹기(")")
+                붙(닫기)
+                return
+            if t and _한글이름(t):
+                먹기()
+                if 보기() == "(":
+                    먹기()
+                    if 보기() != ")":
+                        while True:
+                            비교()
+                            if 보기() == ",":
+                                먹기()
+                                continue
+                            break
+                    먹기(")")
+                    붙(부르기)
+                    호출.append((len(결과), t))
+                    결과.extend(_i32(0))
+                    return
                 붙(꺼내기)
                 결과.extend(_u8(칸(t)))
                 return
@@ -141,10 +237,10 @@ def 묶기(원문: str) -> bytes:
 
         def 곱셈() -> None:
             원자()
-            while 보기() in ("*", "/"):
+            while 보기() in ("*", "/", "%"):
                 op = 먹기()
                 원자()
-                붙(곱하기 if op == "*" else 나누기)
+                붙({"*": 곱하기, "/": 나누기, "%": 나머지}[op])
 
         def 덧셈() -> None:
             곱셈()
@@ -180,113 +276,186 @@ def 묶기(원문: str) -> bytes:
         if i != len(토큰):
             raise 묶기오류(f"묶기: 식 남음 {토큰[i:]!r} ({표현!r})")
 
-    막들: list[dict] = []
-    i = 0
-    while i < len(줄들):
-        줄 = 줄들[i]
+    def 문장들(대상: list[str], 함수안: bool) -> None:
+        막들: list[dict] = []
+        i = 0
+        while i < len(대상):
+            줄 = 대상[i]
 
-        m = re.fullmatch(r'출력\s*\(\s*"(.*)"\s*\)\s*', 줄)
-        if m:
-            글출력(m.group(1).replace("\\n", "\n"))
-            i += 1
-            continue
+            m = re.fullmatch(r'출력\s*\(\s*"(.*)"\s*\)\s*', 줄)
+            if m:
+                글출력(m.group(1).replace("\\n", "\n"))
+                i += 1
+                continue
 
-        m = re.fullmatch(r"출력\s*\(\s*(.+)\s*\)\s*", 줄)
-        if m:
-            식(m.group(1))
-            붙(정수쓰기)
-            i += 1
-            continue
+            m = re.fullmatch(r"출력\s*\(\s*(.+)\s*\)\s*", 줄)
+            if m:
+                식(m.group(1))
+                붙(정수쓰기)
+                i += 1
+                continue
 
-        m = re.fullmatch(r"(만약|동안)\s+(.+)\s*\{\s*", 줄)
-        if m:
-            종류, 조건 = m.group(1), m.group(2)
-            루프 = len(결과) if 종류 == "동안" else None
-            식(조건)
-            붙(영이면점프)
-            jz = len(결과)
-            결과.extend(_i32(0))
-            막들.append({"종류": 종류, "jz": jz, "끝들": [], "루프": 루프})
-            i += 1
-            continue
+            m = re.fullmatch(r"돌려주기(?:\s+(.+))?\s*", 줄)
+            if m:
+                if not 함수안:
+                    raise 묶기오류("묶기: 돌려주기는 묶음 안에서")
+                if m.group(1):
+                    식(m.group(1))
+                else:
+                    붙(정수넣기)
+                    결과.extend(_i64(0))
+                붙(돌려주기)
+                i += 1
+                continue
 
-        if 줄 == "}":
-            if not 막들:
-                raise 묶기오류("묶기: 짝 없는 }")
-            막 = 막들[-1]
-            다음 = 줄들[i + 1] if i + 1 < len(줄들) else ""
-            아니면만약 = re.fullmatch(r"아니면\s+만약\s+(.+)\s*\{\s*", 다음)
-            if 막["종류"] == "동안":
-                붙(점프)
-                결과.extend(_i32(막["루프"] - (len(결과) + 4)))
-                패치(막["jz"])
+            m = re.fullmatch(r"(만약|동안)\s+(.+)\s*\{\s*", 줄)
+            if m:
+                종류, 조건 = m.group(1), m.group(2)
+                루프 = len(결과) if 종류 == "동안" else None
+                식(조건)
+                붙(영이면점프)
+                jz = len(결과)
+                결과.extend(_i32(0))
+                막들.append({"종류": 종류, "jz": jz, "끝들": [], "루프": 루프})
+                i += 1
+                continue
+
+            if 줄 == "}":
+                if not 막들:
+                    raise 묶기오류("묶기: 짝 없는 }")
+                막 = 막들[-1]
+                다음 = 대상[i + 1] if i + 1 < len(대상) else ""
+                아니면만약 = re.fullmatch(r"아니면\s+만약\s+(.+)\s*\{\s*", 다음)
+                if 막["종류"] == "동안":
+                    붙(점프)
+                    결과.extend(_i32(막["루프"] - (len(결과) + 4)))
+                    패치(막["jz"])
+                    막들.pop()
+                    i += 1
+                    continue
+                if 막["종류"] in ("만약", "아니면만약") and 아니면만약:
+                    붙(점프)
+                    막["끝들"].append(len(결과))
+                    결과.extend(_i32(0))
+                    패치(막["jz"])
+                    식(아니면만약.group(1))
+                    붙(영이면점프)
+                    막["jz"] = len(결과)
+                    결과.extend(_i32(0))
+                    막["종류"] = "아니면만약"
+                    i += 2
+                    continue
+                if 막["종류"] in ("만약", "아니면만약") and re.fullmatch(r"아니면\s*\{\s*", 다음):
+                    붙(점프)
+                    막["끝들"].append(len(결과))
+                    결과.extend(_i32(0))
+                    패치(막["jz"])
+                    막["종류"] = "아니면"
+                    막["jz"] = None
+                    i += 2
+                    continue
+                if 막["jz"] is not None:
+                    패치(막["jz"])
+                for p in 막["끝들"]:
+                    패치(p)
                 막들.pop()
                 i += 1
                 continue
-            if 막["종류"] in ("만약", "아니면만약") and 아니면만약:
-                붙(점프)
-                막["끝들"].append(len(결과))
-                결과.extend(_i32(0))
-                패치(막["jz"])
-                식(아니면만약.group(1))
-                붙(영이면점프)
-                막["jz"] = len(결과)
-                결과.extend(_i32(0))
-                막["종류"] = "아니면만약"
-                i += 2
+
+            m = re.fullmatch(
+                r"([가-힣A-Za-z_][가-힣A-Za-z0-9_]*)\s*(\+=|-=|\*=|/=|%=)\s*(.+)\s*",
+                줄,
+            )
+            if m:
+                이름, 기호, 오른 = m.group(1), m.group(2), m.group(3)
+                붙(꺼내기)
+                결과.extend(_u8(칸(이름)))
+                식(오른)
+                붙({"+=": 더하기, "-=": 빼기, "*=": 곱하기, "/=": 나누기, "%=": 나머지}[기호])
+                붙(넣기)
+                결과.extend(_u8(칸(이름)))
+                i += 1
                 continue
-            if 막["종류"] in ("만약", "아니면만약") and re.fullmatch(r"아니면\s*\{\s*", 다음):
-                붙(점프)
-                막["끝들"].append(len(결과))
-                결과.extend(_i32(0))
-                패치(막["jz"])
-                막["종류"] = "아니면"
-                막["jz"] = None
-                i += 2
+
+            m = re.fullmatch(r"([가-힣A-Za-z_][가-힣A-Za-z0-9_]*)\s*=\s*(.+)\s*", 줄)
+            if m:
+                이름, 오른 = m.group(1), m.group(2)
+                식(오른)
+                붙(넣기)
+                결과.extend(_u8(칸(이름)))
+                i += 1
                 continue
-            if 막["jz"] is not None:
-                패치(막["jz"])
-            for p in 막["끝들"]:
-                패치(p)
-            막들.pop()
-            i += 1
-            continue
 
-        m = re.fullmatch(r"([가-힣A-Za-z_][가-힣A-Za-z0-9_]*)\s*=\s*(.+)\s*", 줄)
-        if m:
-            이름, 오른 = m.group(1), m.group(2)
-            식(오른)
-            붙(넣기)
-            결과.extend(_u8(칸(이름)))
-            i += 1
-            continue
+            m = re.fullmatch(r"(열기|만들기|읽기|쓰기|닫기)\s*\(.+\s*\)\s*", 줄)
+            if m:
+                식(줄)
+                if m.group(1) in ("열기", "만들기", "읽기"):
+                    붙(버림)
+                i += 1
+                continue
 
-        raise 묶기오류(f"묶기: 문장 불가 {줄!r}")
+            raise 묶기오류(f"묶기: 문장 불가 {줄!r}")
 
-    if 막들:
-        raise 묶기오류("묶기: } 없음")
+        if 막들:
+            raise 묶기오류("묶기: } 없음")
+
+    문장들(본문, False)
     붙(끝)
+
+    for 이름, 인자, 몸 in 묶음들:
+        if 이름 in 묶음주소:
+            raise 묶기오류(f"묶기: 묶음 중복 {이름}")
+        묶음주소[이름] = len(결과)
+        지역 = {}
+        for 인 in reversed(인자):
+            붙(넣기)
+            결과.extend(_u8(칸(인)))
+        문장들(몸, True)
+        붙(정수넣기)
+        결과.extend(_i64(0))
+        붙(돌려주기)
+
+    for 위치, 이름 in 호출:
+        if 이름 not in 묶음주소:
+            raise 묶기오류(f"묶기: 없는 묶음 {이름}")
+        결과[위치 : 위치 + 4] = _i32(묶음주소[이름] - (위치 + 4))
     return bytes(결과)
 
 
-def _토큰(표현: str) -> list[str]:
-    표현 = 표현.strip()
-    패턴 = re.compile(
-        r"\s*(?:(==|!=|<=|>=|[+\-*/<>()=])|(\d+)|([가-힣A-Za-z_][가-힣A-Za-z0-9_]*))"
-    )
-    출: list[str] = []
-    pos = 0
-    while pos < len(표현):
-        m = 패턴.match(표현, pos)
-        if not m or m.end() == pos:
-            raise 묶기오류(f"묶기: 토큰 불가 {표현[pos:]!r}")
-        pos = m.end()
-        기호, 수, 이름 = m.groups()
-        if 기호 or 수 or 이름:
-            출.append(기호 or 수 or 이름)
+def _가르기(줄들: list[str]) -> tuple[list[str], list[tuple[str, list[str], list[str]]]]:
+    본문: list[str] = []
+    묶음들: list[tuple[str, list[str], list[str]]] = []
+    i = 0
+    while i < len(줄들):
+        m = re.fullmatch(r"묶음\s+([가-힣_][가-힣0-9_]*)\s*\((.*)\)\s*\{\s*", 줄들[i])
+        if not m:
+            본문.append(줄들[i])
+            i += 1
             continue
-        raise 묶기오류(f"묶기: 기호 불가 {표현[pos:]!r}")
-    return 출
+        이름 = m.group(1)
+        인자원 = m.group(2).strip()
+        인자 = [a.strip() for a in 인자원.split(",") if a.strip()] if 인자원 else []
+        for a in 인자:
+            if not _한글이름(a):
+                raise 묶기오류(f"묶기: 인자 이름은 한글만 ({a!r})")
+        i += 1
+        몸: list[str] = []
+        깊이 = 1
+        while i < len(줄들) and 깊이:
+            줄 = 줄들[i]
+            if re.search(r"\{\s*$", 줄):
+                깊이 += 1
+            if 줄 == "}":
+                깊이 -= 1
+                if 깊이 == 0:
+                    i += 1
+                    break
+            몸.append(줄)
+            i += 1
+        else:
+            raise 묶기오류(f"묶기: 묶음 {이름} }} 없음")
+        묶음들.append((이름, 인자, 몸))
+    return 본문, 묶음들
 
 
 def main() -> None:
