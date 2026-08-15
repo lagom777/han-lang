@@ -11,15 +11,21 @@ code_buf:
 vstack:
         .space 32768
 locals:
-        .space 4096
+         .space 16384
 cstack:
-        .space 256
+        .space 1024
 pathbuf:
         .space 1024
 numbuf:
         .space 32
 onebyte:
         .space 8
+heap:
+        .space 262144
+argc_s:
+        .quad 0
+argv_s:
+        .quad 0
 
         .data
 msg_usage:
@@ -62,9 +68,18 @@ optable:
         .quad op_getc
         .quad op_putc
         .quad op_close
-        .equ OP_MAX, 25
+        .quad op_fail
+        .quad op_argopenr
+        .quad op_argopenw
+        .quad op_hget
+        .quad op_hput
+        .equ OP_MAX, 30
 
 _start:
+        mov rax, [rsp]
+        mov [rip + argc_s], rax
+        lea rax, [rsp + 8]
+        mov [rip + argv_s], rax
         mov rax, [rsp]
         cmp rax, 2
         jge 1f
@@ -331,7 +346,7 @@ op_not:
 op_call:
         movsx rax, dword ptr [r14 + r12]
         add r12, 4
-        cmp r8, 16
+        cmp r8, 64
         jge fail
         mov rcx, r8
         shl rcx, 4
@@ -341,7 +356,7 @@ op_call:
         inc r8
         mov rbp, r10
         add r10, 32
-        cmp r10, 512
+        cmp r10, 2048
         jg fail
         add r12, rax
         jmp interp
@@ -431,6 +446,84 @@ op_close:
         mov rdi, [r15 + r13*8]
         mov rax, 3
         syscall
+        jmp interp
+
+op_fail:
+        mov rax, 60
+        mov rdi, 1
+        syscall
+
+op_argopenr:
+        test r13, r13
+        jz fail
+        dec r13
+        mov rax, [r15 + r13*8]
+        add rax, 2
+        mov rcx, [rip + argc_s]
+        cmp rax, rcx
+        jae fail
+        mov rdx, [rip + argv_s]
+        mov rdi, [rdx + rax*8]
+        mov rax, 2
+        xor rsi, rsi
+        xor rdx, rdx
+        syscall
+        cmp rax, 0
+        jl fail
+        cmp r13, 4096
+        jge fail
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+
+op_argopenw:
+        test r13, r13
+        jz fail
+        dec r13
+        mov rax, [r15 + r13*8]
+        add rax, 2
+        mov rcx, [rip + argc_s]
+        cmp rax, rcx
+        jae fail
+        mov rdx, [rip + argv_s]
+        mov rdi, [rdx + rax*8]
+        mov rax, 2
+        mov rsi, 577
+        mov rdx, 420
+        syscall
+        cmp rax, 0
+        jl fail
+        cmp r13, 4096
+        jge fail
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+
+op_hget:
+        test r13, r13
+        jz fail
+        dec r13
+        mov rax, [r15 + r13*8]
+        cmp rax, 262144
+        jae fail
+        lea rdx, [rip + heap]
+        movzx eax, byte ptr [rdx + rax]
+        mov [r15 + r13*8], rax
+        inc r13
+        jmp interp
+
+op_hput:
+        cmp r13, 2
+        jl fail
+        dec r13
+        mov rcx, [r15 + r13*8]
+        dec r13
+        mov rax, [r15 + r13*8]
+        cmp rax, 262144
+        jae fail
+        and rcx, 255
+        lea rdx, [rip + heap]
+        mov byte ptr [rdx + rax], cl
         jmp interp
 
 copy_path:

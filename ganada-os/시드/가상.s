@@ -18,10 +18,13 @@
 // stack of i64, 4096 slots
 .comm vstack, 32768, 3
 // 칸 512*8 (막 16 × 32칸)
-.comm locals, 4096, 3
-.comm cstack, 256, 3
+.comm locals, 16384, 3
+.comm cstack, 1024, 3
 .comm pathbuf, 1024, 3
 .comm onebyte, 8, 3
+.comm heap, 262144, 3
+.comm argc_s, 8, 3
+.comm argv_s, 8, 3
 // print number buffer
 .comm numbuf, 32, 3
 
@@ -30,6 +33,12 @@
 .align 2
 _main:
     // x0 = argc, x1 = argv
+    adrp x2, argc_s@PAGE
+    add x2, x2, argc_s@PAGEOFF
+    str x0, [x2]
+    adrp x2, argv_s@PAGE
+    add x2, x2, argv_s@PAGEOFF
+    str x1, [x2]
     mov x19, x0          // argc
     mov x20, x1          // argv
     cmp x19, #2
@@ -138,6 +147,16 @@ interp:
     b.eq op_putc
     cmp w0, #25
     b.eq op_close
+    cmp w0, #26
+    b.eq op_fail
+    cmp w0, #27
+    b.eq op_argopenr
+    cmp w0, #28
+    b.eq op_argopenw
+    cmp w0, #29
+    b.eq op_hget
+    cmp w0, #30
+    b.eq op_hput
     b fail
 
 op_pushi:
@@ -304,7 +323,7 @@ op_call:
     add x1, x25, x23
     ldrsw x2, [x1]
     add x23, x23, #4
-    cmp x19, #16
+    cmp x19, #64
     b.ge fail
     adrp x3, cstack@PAGE
     add x3, x3, cstack@PAGEOFF
@@ -315,7 +334,7 @@ op_call:
     add x19, x19, #1
     mov x20, x21
     add x21, x21, #32
-    cmp x21, #512
+    cmp x21, #2048
     b.gt fail
     add x23, x23, x2
     b interp
@@ -386,6 +405,73 @@ op_putc:
 op_close:
     bl pop
     bl sys_close
+    b interp
+
+op_fail:
+    mov x0, #1
+    bl sys_exit
+
+op_argopenr:
+    bl pop
+    add x0, x0, #2
+    adrp x2, argc_s@PAGE
+    add x2, x2, argc_s@PAGEOFF
+    ldr x3, [x2]
+    cmp x0, x3
+    b.hs fail
+    adrp x2, argv_s@PAGE
+    add x2, x2, argv_s@PAGEOFF
+    ldr x2, [x2]
+    ldr x0, [x2, x0, lsl #3]
+    mov x1, #0
+    mov x2, #0
+    bl sys_open
+    cmp x0, #0
+    b.lt fail
+    bl push
+    b interp
+
+op_argopenw:
+    bl pop
+    add x0, x0, #2
+    adrp x2, argc_s@PAGE
+    add x2, x2, argc_s@PAGEOFF
+    ldr x3, [x2]
+    cmp x0, x3
+    b.hs fail
+    adrp x2, argv_s@PAGE
+    add x2, x2, argv_s@PAGEOFF
+    ldr x2, [x2]
+    ldr x0, [x2, x0, lsl #3]
+    mov x1, #0x601
+    mov x2, #420
+    bl sys_open
+    cmp x0, #0
+    b.lt fail
+    bl push
+    b interp
+
+op_hget:
+    bl pop
+    mov x1, #262144
+    cmp x0, x1
+    b.hs fail
+    adrp x1, heap@PAGE
+    add x1, x1, heap@PAGEOFF
+    ldrb w0, [x1, x0]
+    bl push
+    b interp
+
+op_hput:
+    bl pop
+    and x2, x0, #255
+    bl pop
+    mov x1, #262144
+    cmp x0, x1
+    b.hs fail
+    adrp x1, heap@PAGE
+    add x1, x1, heap@PAGEOFF
+    strb w2, [x1, x0]
     b interp
 
 copy_path:
