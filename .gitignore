@@ -11,4 +11,5 @@ node_modules/
 
 # 정본 시드 산출 (호스트마다 다름)
 ganada-os/가상
+ganada-os/낳기
 ganada-os/산출/
