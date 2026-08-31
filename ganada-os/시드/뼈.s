@@ -14,6 +14,7 @@
         .equ ONEBYTE, 0x54D420
         .equ ARGC,    0x54D428
         .equ ARGV,    0x54D430
+        .equ HEAPCUR, 0x54D440
 
         .text
 표:
@@ -28,6 +29,7 @@ _start:
         mov qword ptr [ARGC], rax
         lea rax, [rsp + 8]
         mov qword ptr [ARGV], rax
+        mov qword ptr [HEAPCUR], 0
         mov r15, VSTACK
         xor r13, r13
         mov rbx, LOCALS
