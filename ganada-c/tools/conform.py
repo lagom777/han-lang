@@ -19,7 +19,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # ganada-c/
-REPO = os.path.dirname(ROOT)                                          # han-lang/
+REPO = os.path.dirname(ROOT)                                          # ganada-lang/
 PY_INTERP = os.path.join(REPO, '가나다.py')
 TEST_FILE = os.path.join(REPO, 'tests', 'test_han.py')
 EXAMPLES = os.path.join(REPO, 'examples')
