@@ -28,6 +28,10 @@ GOLDEN_ENV = GANADA_REPO=$(GANADA_REPO) GANADA_GOLDEN=$(GANADA_GOLDEN) \
 SEC_WORK := /tmp/ganada-sec-work-$(shell echo $$$$)
 SEC_OK = $(SEC_WORK)/통과표
 
+# 네이티브 회귀 그물 — `실행` 의 네이티브 길이 인터프리터와 같은 결과를 내는지 두 길로 돌려 비교한다.
+NATIVE_WORK := /tmp/ganada-native-work-$(shell echo $$$$)
+NATIVE_OK = $(NATIVE_WORK)/통과표
+
 ganada: $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) $(DEFS) -o ganada $(SRCS) -lm
 
@@ -42,6 +46,10 @@ test: ganada
 	@GANADA_SEC_WORK=$(SEC_WORK) GANADA_SEC_OK=$(SEC_OK) $(GANADA_BIN) 실행 tests/보안회귀.ㄱㄴㄷ || true
 	@test -f $(SEC_OK) || { echo "[보안회귀] 검사 실패 — 통과표 없음 (작업폴더 남김: $(SEC_WORK))"; exit 1; }
 	@rm -rf $(SEC_WORK)
+	@rm -rf $(NATIVE_WORK)
+	@GANADA_BIN=$(GANADA_BIN) GANADA_NATIVE_WORK=$(NATIVE_WORK) GANADA_NATIVE_OK=$(NATIVE_OK) $(GANADA_BIN) 실행 tests/네이티브회귀.ㄱㄴㄷ || true
+	@test -f $(NATIVE_OK) || { echo "[네이티브회귀] 검사 실패 — 통과표 없음 (작업폴더 남김: $(NATIVE_WORK))"; exit 1; }
+	@rm -rf $(NATIVE_WORK)
 
 # 교차 검증(파이썬 필요) — 가나다.py 를 정답지로 직접 대조
 test-conform:

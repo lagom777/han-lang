@@ -2,6 +2,10 @@
 #include "ganada.h"
 #include <unistd.h>
 #include <libgen.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 /* display width: East Asian W/F count as 2 */
 static int ea_wide(uint32_t cp) {
@@ -369,16 +373,48 @@ static int find_na_rt(char *out, size_t outsz) {
     return -1;
 }
 
+/* 셸을 거치지 않고 실행한다 — 경로의 빈칸·따옴표·; 가 명령으로 읽히지 않게.
+ * system() 처럼 기다리는 동안 SIGINT/SIGQUIT 는 자식만 받는다. quiet: 자식의 stdout/stderr 를 버린다.
+ * 반환: waitpid 상태, 실행 실패는 -1. */
+static int spawn_wait(char *const argv[], int quiet) {
+    struct sigaction ign, oint, oquit;
+    memset(&ign, 0, sizeof ign);
+    ign.sa_handler = SIG_IGN;
+    sigemptyset(&ign.sa_mask);
+    sigaction(SIGINT, &ign, &oint);
+    sigaction(SIGQUIT, &ign, &oquit);
+    int st = -1;
+    pid_t pid = fork();
+    if (pid == 0) {
+        sigaction(SIGINT, &oint, NULL);
+        sigaction(SIGQUIT, &oquit, NULL);
+        if (quiet) {
+            int fd = open("/dev/null", O_WRONLY);
+            if (fd >= 0) { dup2(fd, 1); dup2(fd, 2); if (fd > 2) close(fd); }
+        }
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    if (pid > 0)
+        while (waitpid(pid, &st, 0) < 0)
+            if (errno != EINTR) { st = -1; break; }
+    sigaction(SIGINT, &oint, NULL);
+    sigaction(SIGQUIT, &oquit, NULL);
+    return st;
+}
+
 /* LLVM 경로 모드:
  *   IR=IR만 / BUILD=바이너리 / RUN=바이너리+실행(실패 시 하드 에러)
- *   TRY_RUN=실행 경로용: emit/clang 실패 시 2 반환 → 호출측이 인터프리터로 폴백
- * 반환: 0 성공, 1 하드 실패, 2 soft(TRY_RUN only · 폴백 가능) */
+ *   TRY_RUN=실행 경로용: 읽기·구문·codegen·clang 실패 시 2 반환 → 호출측이 인터프리터로 폴백
+ *   (구문 오류도 폴백한다 — 오류 문구를 인터프리터가 내야 두 길이 같다)
+ * 반환: 0 성공, 1 하드 실패, 2 soft(TRY_RUN only · 폴백 가능). 실행한 프로그램의 종료코드는 그대로. */
 enum { LLVM_IR = 0, LLVM_BUILD = 1, LLVM_RUN = 2, LLVM_TRY_RUN = 3 };
 
 static int compile_llvm(const char *path, int mode) {
     int try_mode = (mode == LLVM_TRY_RUN);
     char *src = read_file_utf8(path);
     if (!src) {
+        if (try_mode) return 2;
         fprintf(stderr, "파일을 열 수 없습니다: %s\n", path);
         return 1;
     }
@@ -396,40 +432,49 @@ static int compile_llvm(const char *path, int mode) {
         it->top = h.prev;
     } else {
         it->top = h.prev;
-        if (it->err) {
+        if (it->err && !try_mode) {
             char *shown = attach_source_line(it->err, src);
             fprintf(stderr, "오류: %s\n", shown);
-            free(it->err); it->err = NULL;
         }
+        free(it->err); it->err = NULL;
         free(src);
-        return 1; /* 구문 오류 — 인터프리터도 동일 실패 */
+        return try_mode ? 2 : 1;
     }
-    char *ir = llvm_emit_module(it, root, &err);
+    char *ir = llvm_emit_module(it, root, src, &err);
     if (!ir) {
         if (try_mode) {
             free(err);
             free(src);
             return 2; /* 미지원 기능 → 폴백 */
         }
-        fprintf(stderr, "LLVM: %s\n", err ? err : "코드 생성 실패");
+        fprintf(stderr, "%s\n", err ? err : "LLVM: 코드 생성 실패");
         free(err);
         free(src);
         return 1;
     }
 
+    char tmpdir[4096] = "";
     char outll[4096];
     char outbin[4096];
+    char runbin[4096 + 2];
     if (try_mode) {
-        /* 실행 폴백 경로: 소스 옆 파일을 오염시키지 않도록 임시 경로 */
-        snprintf(outll, sizeof outll, "/tmp/ganada_run_%d.ll", (int)getpid());
-        snprintf(outbin, sizeof outbin, "/tmp/ganada_run_%d.native", (int)getpid());
+        /* 실행 폴백 경로: 소스 옆을 더럽히지 않고, 남이 미리 심은 /tmp 파일도 따라가지 않게 전용 폴더 */
+        const char *base = getenv("TMPDIR");
+        if (!base || !base[0]) base = "/tmp";
+        snprintf(tmpdir, sizeof tmpdir, "%s/ganada_run_XXXXXX", base);
+        if (!mkdtemp(tmpdir)) { free(ir); free(src); return 2; }
+        snprintf(outll, sizeof outll, "%s/prog.ll", tmpdir);
+        snprintf(outbin, sizeof outbin, "%s/prog", tmpdir);
     } else {
         snprintf(outll, sizeof outll, "%s.ll", path);
         snprintf(outbin, sizeof outbin, "%s.native", path);
     }
+    /* execvp 는 / 없는 이름을 PATH 에서 찾는다 — 지금 폴더의 파일이면 ./ 를 붙인다 */
+    snprintf(runbin, sizeof runbin, "%s%s", strchr(outbin, '/') ? "" : "./", outbin);
     FILE *f = fopen(outll, "w");
     if (!f) {
         if (try_mode) {
+            rmdir(tmpdir);
             free(ir); free(src);
             return 2;
         }
@@ -448,11 +493,11 @@ static int compile_llvm(const char *path, int mode) {
         return 0;
     }
 
-    /* 빌드/나/TRY: clang links IR + na_rt.c (prints, string concat). */
+    /* 빌드/나/TRY: clang links IR + na_rt.c (prints, strings, errors). */
     char nart[4096];
     if (find_na_rt(nart, sizeof nart) != 0) {
         if (try_mode) {
-            unlink(outll);
+            unlink(outll); rmdir(tmpdir);
             free(ir); free(src);
             return 2;
         }
@@ -460,23 +505,18 @@ static int compile_llvm(const char *path, int mode) {
         free(ir); free(src);
         return 1;
     }
-    char cmd[12288];
     /* TRY: clang 진단은 삼키고, 실패 시 인터프리터로 조용히 폴백 */
-    if (try_mode)
-        snprintf(cmd, sizeof cmd, "clang -O2 -o %s %s %s >/dev/null 2>&1", outbin, outll, nart);
-    else {
-        snprintf(cmd, sizeof cmd, "clang -O2 -o %s %s %s 2>&1", outbin, outll, nart);
+    if (!try_mode)
         fprintf(stderr, "clang → %s (+ na_rt)\n", outbin);
-    }
-    int rc = system(cmd);
-    if (rc != 0) {
+    char *cc_argv[] = { "clang", "-O2", "-Wno-override-module", "-o", outbin, outll, nart, NULL };
+    int st = spawn_wait(cc_argv, try_mode);
+    if (st == -1 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) {
         if (try_mode) {
-            unlink(outll);
-            unlink(outbin);
+            unlink(outll); unlink(outbin); rmdir(tmpdir);
             free(ir); free(src);
             return 2;
         }
-        fprintf(stderr, "clang 링크 실패 (rc=%d)\n", rc);
+        fprintf(stderr, "clang 링크 실패 (rc=%d)\n", st);
         free(ir); free(src);
         return 1;
     }
@@ -486,14 +526,22 @@ static int compile_llvm(const char *path, int mode) {
         return 0;
     }
     /* LLVM_RUN / LLVM_TRY_RUN: 바로 실행 (프로그램 종료코드는 폴백 사유 아님) */
-    snprintf(cmd, sizeof cmd, "%s", outbin);
-    rc = system(cmd);
+    fflush(stdout);
+    char *run_argv[] = { runbin, NULL };
+    st = spawn_wait(run_argv, 0);
     if (try_mode) {
-        unlink(outll);
-        unlink(outbin);
+        unlink(outll); unlink(outbin); rmdir(tmpdir);
     }
     free(ir); free(src);
-    return rc ? 1 : 0;
+    if (st == -1) return 1;
+    if (WIFSIGNALED(st)) {
+        /* 인터프리터로 돌았다면 이 프로세스가 그 신호로 끝났다(파이프 끊김·Ctrl-C) — 똑같이 */
+        int sig = WTERMSIG(st);
+        signal(sig, SIG_DFL);
+        raise(sig);
+        return 128 + sig;
+    }
+    return WEXITSTATUS(st);
 }
 
 /* 실행/run: 네이티브 시도 → 실패 시 인터프리터. env 탈출구 지원. */
