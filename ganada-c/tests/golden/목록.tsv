@@ -1,6 +1,6 @@
 # 골든 코퍼스 인덱스 — tools/골든생성.py 가 만든다. 탭 구분. # 로 시작하는 줄은 주석.
 # 구분	이름	검사	코드	소스	기대	입력	작업	유래
-합계	케이스=311	예제=82	0	-	-	-	-	생성기가 기록한 총계
+합계	케이스=311	예제=83	0	-	-	-	-	생성기가 기록한 총계
 케이스	0001_test_hello	출력	0	ganada-c/tests/golden/케이스/0001_test_hello.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0001_test_hello.기대	-	ganada-c/tests/golden/케이스	test_hello
 케이스	0002_test_arith_and_concat	출력	0	ganada-c/tests/golden/케이스/0002_test_arith_and_concat.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0002_test_arith_and_concat.기대	-	ganada-c/tests/golden/케이스	test_arith_and_concat
 케이스	0003_test_arith_and_concat	출력	0	ganada-c/tests/golden/케이스/0003_test_arith_and_concat.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0003_test_arith_and_concat.기대	-	ganada-c/tests/golden/케이스	test_arith_and_concat
@@ -359,6 +359,7 @@
 예제	linspace	출력	0	examples/linspace.ㄱㄴㄷ	ganada-c/tests/golden/예제/linspace.기대	-	임시	linspace.ㄱㄴㄷ
 예제	list	출력	0	examples/list.ㄱㄴㄷ	ganada-c/tests/golden/예제/list.기대	-	임시	list.ㄱㄴㄷ
 예제	list_files	출력	0	examples/list_files.ㄱㄴㄷ	ganada-c/tests/golden/예제/list_files.기대	-	임시	list_files.ㄱㄴㄷ
+예제	llvm_fib	출력	0	examples/llvm_fib.ㄱㄴㄷ	ganada-c/tests/golden/예제/llvm_fib.기대	-	임시	llvm_fib.ㄱㄴㄷ
 예제	make_dict	출력	0	examples/make_dict.ㄱㄴㄷ	ganada-c/tests/golden/예제/make_dict.기대	-	임시	make_dict.ㄱㄴㄷ
 예제	map_filter	출력	0	examples/map_filter.ㄱㄴㄷ	ganada-c/tests/golden/예제/map_filter.기대	-	임시	map_filter.ㄱㄴㄷ
 예제	math	출력	0	examples/math.ㄱㄴㄷ	ganada-c/tests/golden/예제/math.기대	-	임시	math.ㄱㄴㄷ

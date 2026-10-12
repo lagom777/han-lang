@@ -164,6 +164,7 @@ struct Interp {
 enum { GC_STR, GC_LIST, GC_DICT, GC_FUNC, GC_ENV };
 
 void gc_init(void *stack_bottom);           /* called once from main */
+size_t gc_stack_used(void);                 /* C stack bytes in use since main */
 void gc_set_interp(Interp *it);
 Interp *gc_interp(void);                    /* current interp (NULL before set) */
 void *gc_alloc(size_t size, int kind);      /* collectable heap value */
@@ -256,7 +257,9 @@ char *attach_source_line(const char *msg, const char *src);
 char *read_file_utf8(const char *path);                 /* NULL on failure */
 
 /* ---------------------------------------------------------------- LLVM IR codegen (subset) */
-/* Returns malloc'd LLVM IR module text, or NULL. On failure *errp is malloc'd message. */
-char *llvm_emit_module(Interp *it, Node *root, char **errp);
+/* Returns malloc'd LLVM IR module text, or NULL. On failure *errp is malloc'd message.
+ * Accepts only programs whose native output would match the interpreter (run falls back
+ * otherwise). src is embedded so runtime errors can quote the failing line. */
+char *llvm_emit_module(Interp *it, Node *root, const char *src, char **errp);
 
 #endif

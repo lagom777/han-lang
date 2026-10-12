@@ -2,6 +2,7 @@
 #include "ganada.h"
 #include <math.h>
 #include <stdarg.h>
+#include <sys/resource.h>
 
 /* ---------------------------------------------------------------- errors */
 void g_throw(Interp *it, int code) {
@@ -388,7 +389,8 @@ static Value binop(Interp *it, int op, Node *ln, Node *rn, Env *env) {
         if (!is_num_v(a) || !is_num_v(b)) type_err2(it, "%", a, b);
         if (to_dbl(b) == 0) G_ERR0(it, ERR_DIV_ZERO);
         if (a.tag == VT_INT && b.tag == VT_INT && b.as.i != 0) {
-            int64_t r = a.as.i % b.as.i;
+            /* INT64_MIN % -1 은 C 에서 넘침(SIGFPE) — 나머지는 수학적으로 0 (파이썬과 같다) */
+            int64_t r = b.as.i == -1 ? 0 : a.as.i % b.as.i;
             if (r != 0 && ((r < 0) != (b.as.i < 0))) r += b.as.i;
             return v_int(r);
         }
@@ -509,6 +511,23 @@ static Value slice_eval(Interp *it, Value obj, Node *sn, Node *en, Env *env) {
 }
 
 /* ---------------------------------------------------------------- funcs */
+/* 깊이 700 에 닿기 전에 C 스택이 먼저 바닥날 수 있다(함수 몸에 반복·조건이 깊게 겹치면
+ * 한 단계가 커진다). 그러면 SIGSEGV 로 죽고 버퍼의 출력까지 잃었다 — 한도에 한 단계 여유
+ * (1/16, 최소 256KB)만 남기고 같은 재귀 오류로 멈춘다. 여유를 크게 잡으면 전에 끝까지
+ * 돌던 프로그램까지 일찍 멈춘다. */
+static size_t stack_budget(void) {
+    static size_t budget;
+    if (!budget) {
+        size_t lim = (size_t)8 << 20;
+        struct rlimit rl;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0)
+            lim = rl.rlim_cur == RLIM_INFINITY ? (size_t)256 << 20 : (size_t)rl.rlim_cur;
+        size_t margin = lim / 16 > ((size_t)256 << 10) ? lim / 16 : ((size_t)256 << 10);
+        budget = lim > 2 * margin ? lim - margin : lim / 2;
+    }
+    return budget;
+}
+
 Value apply_func(Interp *it, Value fnv, Value *args, int nargs) {
     if (fnv.tag != VT_FUNC) G_ERR0(it, ERR_NOT_CALLABLE);
     Func *fn = fnv.as.fn;
@@ -532,7 +551,7 @@ Value apply_func(Interp *it, Value fnv, Value *args, int nargs) {
         }
         it->depth++;
         depth_added = 1;
-        if (it->depth > 700) G_ERR0(it, ERR_RECURSION);
+        if (it->depth > 700 || gc_stack_used() > stack_budget()) G_ERR0(it, ERR_RECURSION);
         exec_block(it, fn->body, local);
         it->depth--;
         POP_H(it);

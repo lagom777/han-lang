@@ -289,6 +289,12 @@ void gc_init(void *stack_bottom) {
     if (s) { int v = atoi(s); g_stress = v > 0 ? v : 0; }
 }
 
+/* bytes of C stack in use below main's frame (0 before gc_init) */
+size_t gc_stack_used(void) {
+    const char *fa = (const char *)__builtin_frame_address(0);
+    return g_bottom && fa < g_bottom ? (size_t)(g_bottom - fa) : 0;
+}
+
 void gc_set_interp(Interp *it) { g_it = it; }
 Interp *gc_interp(void) { return g_it; }
 

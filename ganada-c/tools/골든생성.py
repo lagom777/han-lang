@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import conform  # 케이스 추출 로직은 기존 하니스와 공유(정답지 단일화)
 
 ROOT = conform.ROOT                      # ganada-c/
-REPO = conform.REPO                      # han-lang/
+REPO = conform.REPO                      # ganada-lang/
 EXAMPLES = conform.EXAMPLES
 GOLDEN = os.path.join(ROOT, 'tests', 'golden')
 CASES = os.path.join(GOLDEN, '케이스')
