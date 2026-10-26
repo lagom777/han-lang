@@ -283,17 +283,22 @@ static void gc_collect(void) {
 }
 
 /* ---------------------------------------------------------------- api */
-void gc_init(void *stack_bottom) {
+static size_t g_stack_size;    /* stack the interpreter runs on; 0 = main thread (RLIMIT_STACK) */
+
+void gc_init(void *stack_bottom, size_t stack_size) {
     g_bottom = (const char *)stack_bottom;
+    g_stack_size = stack_size;
     const char *s = getenv("GANADA_GC_STRESS");
     if (s) { int v = atoi(s); g_stress = v > 0 ? v : 0; }
 }
 
-/* bytes of C stack in use below main's frame (0 before gc_init) */
+/* bytes of C stack in use below the entry frame given to gc_init (0 before gc_init) */
 size_t gc_stack_used(void) {
     const char *fa = (const char *)__builtin_frame_address(0);
     return g_bottom && fa < g_bottom ? (size_t)(g_bottom - fa) : 0;
 }
+
+size_t gc_stack_size(void) { return g_stack_size; }
 
 void gc_set_interp(Interp *it) { g_it = it; }
 Interp *gc_interp(void) { return g_it; }

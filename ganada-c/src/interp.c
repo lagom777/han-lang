@@ -511,17 +511,20 @@ static Value slice_eval(Interp *it, Value obj, Node *sn, Node *en, Env *env) {
 }
 
 /* ---------------------------------------------------------------- funcs */
-/* 깊이 700 에 닿기 전에 C 스택이 먼저 바닥날 수 있다(함수 몸에 반복·조건이 깊게 겹치면
- * 한 단계가 커진다). 그러면 SIGSEGV 로 죽고 버퍼의 출력까지 잃었다 — 한도에 한 단계 여유
- * (1/16, 최소 256KB)만 남기고 같은 재귀 오류로 멈춘다. 여유를 크게 잡으면 전에 끝까지
- * 돌던 프로그램까지 일찍 멈춘다. */
+/* 함수 몸에 반복·조건이 깊게 겹치면 재귀 한 단계가 수십 KB 가 된다. main.c 는 그래서 큰 스택의
+ * 스레드에서 돌려 깊이 700 까지 닿게 하고, 이 검사는 그래도 스택이 바닥나려 할 때의 마지막 방어다
+ * (스레드를 못 만들어 8MB 메인 스택에서 돌 때 특히) — SIGSEGV 로 죽고 버퍼의 출력까지 잃는 대신
+ * 한도에 한 단계 여유(1/16, 최소 256KB)만 남기고 같은 재귀 오류로 멈춘다. */
 static size_t stack_budget(void) {
     static size_t budget;
     if (!budget) {
-        size_t lim = (size_t)8 << 20;
+        size_t lim = gc_stack_size();
         struct rlimit rl;
-        if (getrlimit(RLIMIT_STACK, &rl) == 0)
-            lim = rl.rlim_cur == RLIM_INFINITY ? (size_t)256 << 20 : (size_t)rl.rlim_cur;
+        if (!lim) {
+            lim = (size_t)8 << 20;
+            if (getrlimit(RLIMIT_STACK, &rl) == 0)
+                lim = rl.rlim_cur == RLIM_INFINITY ? (size_t)256 << 20 : (size_t)rl.rlim_cur;
+        }
         size_t margin = lim / 16 > ((size_t)256 << 10) ? lim / 16 : ((size_t)256 << 10);
         budget = lim > 2 * margin ? lim - margin : lim / 2;
     }

@@ -163,8 +163,9 @@ struct Interp {
 /* ---------------------------------------------------------------- gc.c */
 enum { GC_STR, GC_LIST, GC_DICT, GC_FUNC, GC_ENV };
 
-void gc_init(void *stack_bottom);           /* called once from main */
-size_t gc_stack_used(void);                 /* C stack bytes in use since main */
+void gc_init(void *stack_bottom, size_t stack_size); /* once, on the interpreter's thread; size 0 = RLIMIT_STACK */
+size_t gc_stack_used(void);                 /* C stack bytes in use since gc_init's frame */
+size_t gc_stack_size(void);                 /* stack size given to gc_init (0 = unknown) */
 void gc_set_interp(Interp *it);
 Interp *gc_interp(void);                    /* current interp (NULL before set) */
 void *gc_alloc(size_t size, int kind);      /* collectable heap value */

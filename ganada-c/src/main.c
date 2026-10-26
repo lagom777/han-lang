@@ -4,6 +4,7 @@
 #include <libgen.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
 
@@ -569,8 +570,8 @@ static int run_smart(const char *path) {
     return rc;
 }
 
-int main(int argc, char **argv) {
-    gc_init(__builtin_frame_address(0));    /* high end of the stack to scan */
+static int cli_main(int argc, char **argv, size_t stack_size) {
+    gc_init(__builtin_frame_address(0), stack_size);    /* high end of the stack to scan */
     /* 실행/run — 네이티브 우선, 미지원 시 인터프리터 폴백 */
     if (argc >= 3 && (!strcmp(argv[1], "run") || !strcmp(argv[1], CMD_RUN_KO)))
         return run_smart(argv[2]);
@@ -597,4 +598,42 @@ int main(int argc, char **argv) {
     fprintf(stderr, "  GANADA_FORCE_INTERP=1     → 항상 인터프리터\n");
     fprintf(stderr, "  GANADA_FORCE_LLVM=1       → 네이티브만 (실패 시 오류)\n");
     return 2;
+}
+
+/* 인터프리터는 C 재귀로 돈다. 함수 몸에 반복이 여럿 겹치면 재귀 한 단계가 수십 KB 가 되어, 8MB 기본
+ * 스택으로는 재귀 한도(깊이 700)에 닿기 전에 바닥났다(반복 8겹이면 깊이 300 남짓) — 네이티브는 700 까지
+ * 가니 두 길의 답도 갈렸다. 그래서 큰 스택의 스레드에서 돈다(쓰는 만큼만 메모리를 먹는다).
+ * 메인 스레드는 기다리기만 하며 모든 신호를 막아 둔다: Ctrl-C 같은 프로세스 신호가 일하는 스레드로 가야
+ * 서버의 accept() 가 깨고 처리기도 그 스레드에서 돈다. 스레드를 못 만들면 메인 스레드에서 그대로 돈다. */
+#define CLI_STACK ((size_t)256 << 20)
+
+typedef struct { int argc; char **argv; sigset_t mask; int rc; } CliArgs;
+
+static void *cli_thread(void *p) {
+    CliArgs *a = p;
+    pthread_sigmask(SIG_SETMASK, &a->mask, NULL);   /* 원래 마스크로 — 신호는 이 스레드가 받는다 */
+    a->rc = cli_main(a->argc, a->argv, CLI_STACK);
+    return NULL;
+}
+
+int main(int argc, char **argv) {
+    CliArgs a = { argc, argv };
+    sigset_t all;
+    pthread_attr_t at;
+    pthread_t th;
+    sigfillset(&all);
+    if (pthread_attr_init(&at) == 0) {
+        /* 새 스레드는 모두 막힌 채 태어나 곧 원래 마스크로 푼다 — 그 사이 온 신호는 보류될 뿐이다 */
+        if (pthread_attr_setstacksize(&at, CLI_STACK) == 0
+            && pthread_sigmask(SIG_SETMASK, &all, &a.mask) == 0) {
+            if (pthread_create(&th, &at, cli_thread, &a) == 0) {
+                pthread_attr_destroy(&at);
+                pthread_join(th, NULL);
+                return a.rc;
+            }
+            pthread_sigmask(SIG_SETMASK, &a.mask, NULL);
+        }
+        pthread_attr_destroy(&at);
+    }
+    return cli_main(argc, argv, 0);
 }

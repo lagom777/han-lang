@@ -13,6 +13,8 @@ EMBED = src/na_rt_embed.h
 # realpath·clock_gettime·sigaction·_longjmp·PATH_MAX…). macOS 헤더는 그냥 노출하지만
 # 리눅스 빌드에는 이 정의가 필요하다. CFLAGS 를 덮어써도 사라지지 않게 따로 둔다.
 DEFS = -D_GNU_SOURCE
+# 인터프리터는 큰 스택의 스레드에서 돈다(main.c). 옛 glibc 는 -pthread 가 있어야 링크된다.
+THREADS = -pthread
 
 # 골든 검사용 — 검사할 바이너리(러너를 돌리는 것도 이것)
 GANADA_BIN ?= $(CURDIR)/ganada
@@ -36,7 +38,7 @@ NATIVE_WORK := /tmp/ganada-native-work-$(shell echo $$$$)
 NATIVE_OK = $(NATIVE_WORK)/통과표
 
 ganada: $(SRCS) $(HDRS) $(EMBED)
-	$(CC) $(CFLAGS) $(DEFS) -o ganada $(SRCS) -lm
+	$(CC) $(CFLAGS) $(DEFS) $(THREADS) -o ganada $(SRCS) -lm
 
 # od · sed 만 쓴다(POSIX — 리눅스·macOS·도커 빌드 단계 모두).
 $(EMBED): src/na_rt.h $(NA_RT)
