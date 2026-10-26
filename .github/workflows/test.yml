@@ -12,6 +12,7 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 30         # 무한 반복으로 퇴행하면 기본 6시간을 다 쓴다
     steps:
       - uses: actions/checkout@v5
       - name: clang (네이티브 길 검사에 필요)
@@ -31,6 +32,7 @@ jobs:
 
   macos:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - name: ganada-c — 골든 · 보안회귀 · 네이티브회귀
