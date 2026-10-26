@@ -6,6 +6,7 @@ __pycache__/
 ganada-c/ganada
 ganada-c/*.o
 ganada-c/src/*.o
+ganada-c/src/na_rt_embed.h
 
 # `가나다 빌드`/`컴파일` 이 소스 옆에 만드는 것 (플랫폼마다 다르다)
 *.ㄱㄴㄷ.ll

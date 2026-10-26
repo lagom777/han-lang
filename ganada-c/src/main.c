@@ -338,39 +338,37 @@ static void repl(void) {
 #define CMD_RUN_KO     "\xEC\x8B\xA4\xED\x96\x89"               /* 실행 */
 #define CMD_REPL_KO    "\xEB\x8C\x80\xED\x99\x94"               /* 대화 */
 
-/* Path to na_rt.c for linking native user programs (not into ganada itself). */
-static char g_argv0[4096];
+/* 네이티브 프로그램에 함께 묶는 런타임(na_rt.h · na_rt.c) — make 가 실행 파일 안에 넣어 둔다.
+ * 그래서 설치하거나 옮긴 바이너리도 컴파일할 때 작업 폴더에 풀어 쓰기만 하면 된다. */
+#include "na_rt_embed.h"
 
-static int find_na_rt(char *out, size_t outsz) {
-    /* 1) <dir(argv0)>/src/na_rt.c  (dev: ganada-c/ganada → ganada-c/src/na_rt.c) */
-    if (g_argv0[0]) {
-        char resolved[4096];
-        if (realpath(g_argv0, resolved)) {
-            char *slash = strrchr(resolved, '/');
-            if (slash) {
-                *slash = 0;
-                snprintf(out, outsz, "%s/src/na_rt.c", resolved);
-                if (access(out, R_OK) == 0) return 0;
-            }
-        }
-        char tmp[4096];
-        snprintf(tmp, sizeof tmp, "%s", g_argv0);
-        char *slash = strrchr(tmp, '/');
-        if (slash) {
-            *slash = 0;
-            snprintf(out, outsz, "%s/src/na_rt.c", tmp);
-            if (access(out, R_OK) == 0) return 0;
-        }
+static int write_bytes(const char *path, const unsigned char *data, size_t n) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    size_t w = fwrite(data, 1, n, f);
+    if (fclose(f) != 0 || w != n) return -1;
+    return 0;
+}
+
+/* 작업 폴더 dir 에 na_rt.h · na_rt.c 를 쓰고 na_rt.c 경로를 nart 에 돌려준다. 0 = 성공 */
+static int write_runtime(const char *dir, char *nart, size_t nartsz) {
+    char h[4096 + 16];
+    snprintf(h, sizeof h, "%s/na_rt.h", dir);
+    snprintf(nart, nartsz, "%s/na_rt.c", dir);
+    if (write_bytes(h, EMBED_na_rt_h, sizeof EMBED_na_rt_h - 1) != 0) return -1;
+    return write_bytes(nart, EMBED_na_rt_c, sizeof EMBED_na_rt_c - 1);
+}
+
+/* 작업 폴더를 치운다 — 이 폴더엔 아래 네 파일만 생긴다 */
+static void rm_work(const char *dir) {
+    static const char *names[] = { "na_rt.h", "na_rt.c", "prog.ll", "prog", NULL };
+    if (!dir[0]) return;
+    char p[4096 + 16];
+    for (int i = 0; names[i]; i++) {
+        snprintf(p, sizeof p, "%s/%s", dir, names[i]);
+        unlink(p);
     }
-    /* 2) cwd-relative fallbacks */
-    static const char *cands[] = { "src/na_rt.c", "ganada-c/src/na_rt.c", NULL };
-    for (int i = 0; cands[i]; i++) {
-        if (access(cands[i], R_OK) == 0) {
-            snprintf(out, outsz, "%s", cands[i]);
-            return 0;
-        }
-    }
-    return -1;
+    rmdir(dir);
 }
 
 /* 기다리는 동안 받은 SIGINT/SIGQUIT (0 = 없음) */
@@ -470,18 +468,26 @@ static int compile_llvm(const char *path, int mode) {
         return 1;
     }
 
-    char tmpdir[4096] = "";
-    char outll[4096];
-    char outbin[4096];
-    char runbin[4096 + 2];
-    if (try_mode) {
-        /* 실행 폴백 경로: 소스 옆을 더럽히지 않고, 남이 미리 심은 /tmp 파일도 따라가지 않게 전용 폴더 */
+    /* 작업 폴더(전용 mkdtemp): 런타임 소스를 풀어 두고, 실행 경로에선 IR·바이너리도 둔다.
+     * 소스 옆을 더럽히지 않고, 남이 /tmp 에 미리 심은 파일도 따라가지 않는다. */
+    char work[4096] = "";
+    if (mode != LLVM_IR) {
         const char *base = getenv("TMPDIR");
         if (!base || !base[0]) base = "/tmp";
-        snprintf(tmpdir, sizeof tmpdir, "%s/ganada_run_XXXXXX", base);
-        if (!mkdtemp(tmpdir)) { free(ir); free(src); return 2; }
-        snprintf(outll, sizeof outll, "%s/prog.ll", tmpdir);
-        snprintf(outbin, sizeof outbin, "%s/prog", tmpdir);
+        snprintf(work, sizeof work, "%s/ganada_run_XXXXXX", base);
+        if (!mkdtemp(work)) {
+            if (!try_mode) fprintf(stderr, "LLVM: 임시 폴더를 만들 수 없습니다 (%s)\n", base);
+            free(ir); free(src);
+            return try_mode ? 2 : 1;
+        }
+    }
+    char outll[4096 + 16];
+    char outbin[4096 + 16];
+    char runbin[4096 + 32];
+    char nart[4096 + 16];
+    if (try_mode) {
+        snprintf(outll, sizeof outll, "%s/prog.ll", work);
+        snprintf(outbin, sizeof outbin, "%s/prog", work);
     } else {
         snprintf(outll, sizeof outll, "%s.ll", path);
         snprintf(outbin, sizeof outbin, "%s.native", path);
@@ -490,14 +496,10 @@ static int compile_llvm(const char *path, int mode) {
     snprintf(runbin, sizeof runbin, "%s%s", strchr(outbin, '/') ? "" : "./", outbin);
     FILE *f = fopen(outll, "w");
     if (!f) {
-        if (try_mode) {
-            rmdir(tmpdir);
-            free(ir); free(src);
-            return 2;
-        }
-        fprintf(stderr, "쓸 수 없음: %s\n", outll);
+        rm_work(work);
+        if (!try_mode) fprintf(stderr, "쓸 수 없음: %s\n", outll);
         free(ir); free(src);
-        return 1;
+        return try_mode ? 2 : 1;
     }
     fputs(ir, f);
     fclose(f);
@@ -511,16 +513,11 @@ static int compile_llvm(const char *path, int mode) {
     }
 
     /* 빌드/나/TRY: clang links IR + na_rt.c (prints, strings, errors). */
-    char nart[4096];
-    if (find_na_rt(nart, sizeof nart) != 0) {
-        if (try_mode) {
-            unlink(outll); rmdir(tmpdir);
-            free(ir); free(src);
-            return 2;
-        }
-        fprintf(stderr, "LLVM: na_rt.c 를 찾을 수 없습니다 (ganada-c/src/na_rt.c)\n");
+    if (write_runtime(work, nart, sizeof nart) != 0) {
+        rm_work(work);
+        if (!try_mode) fprintf(stderr, "LLVM: 런타임을 쓸 수 없습니다 (%s)\n", work);
         free(ir); free(src);
-        return 1;
+        return try_mode ? 2 : 1;
     }
     /* TRY: clang 진단은 삼키고, 실패 시 인터프리터로 조용히 폴백 */
     if (!try_mode)
@@ -528,21 +525,18 @@ static int compile_llvm(const char *path, int mode) {
     char *cc_argv[] = { "clang", "-O2", "-Wno-override-module", "-o", outbin, outll, nart, NULL };
     int st = spawn_wait(cc_argv, try_mode);
     if (g_got_sig) {   /* 컴파일 도중 Ctrl-C — 폴백해서 프로그램을 돌리면 안 된다 */
-        if (try_mode) { unlink(outll); unlink(outbin); rmdir(tmpdir); }
+        rm_work(work);
         free(ir); free(src);
         return die_by(g_got_sig);
     }
     if (st == -1 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) {
-        if (try_mode) {
-            unlink(outll); unlink(outbin); rmdir(tmpdir);
-            free(ir); free(src);
-            return 2;
-        }
-        fprintf(stderr, "clang 링크 실패 (rc=%d)\n", st);
+        rm_work(work);
+        if (!try_mode) fprintf(stderr, "clang 링크 실패 (rc=%d)\n", st);
         free(ir); free(src);
-        return 1;
+        return try_mode ? 2 : 1;
     }
     if (mode == LLVM_BUILD) {
+        rm_work(work);
         fprintf(stderr, "네이티브 바이너리 → %s\n", outbin);
         free(ir); free(src);
         return 0;
@@ -552,9 +546,7 @@ static int compile_llvm(const char *path, int mode) {
     char *run_argv[] = { runbin, NULL };
     st = spawn_wait(run_argv, 0);
     int sig = g_got_sig ? g_got_sig : (st != -1 && WIFSIGNALED(st)) ? WTERMSIG(st) : 0;
-    if (try_mode) {
-        unlink(outll); unlink(outbin); rmdir(tmpdir);
-    }
+    rm_work(work);
     free(ir); free(src);
     if (sig) return die_by(sig);
     if (st == -1) return 1;
@@ -579,10 +571,6 @@ static int run_smart(const char *path) {
 
 int main(int argc, char **argv) {
     gc_init(__builtin_frame_address(0));    /* high end of the stack to scan */
-    if (argv[0]) {
-        strncpy(g_argv0, argv[0], sizeof g_argv0 - 1);
-        g_argv0[sizeof g_argv0 - 1] = 0;
-    }
     /* 실행/run — 네이티브 우선, 미지원 시 인터프리터 폴백 */
     if (argc >= 3 && (!strcmp(argv[1], "run") || !strcmp(argv[1], CMD_RUN_KO)))
         return run_smart(argv[2]);
