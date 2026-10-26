@@ -16,7 +16,8 @@
  * `char *` into a string's bytes or a `Value *` into a list's item array keeps
  * the owning object alive.  Consequence: an unreachable object may survive a
  * cycle or two (a stale stack word can name it), but a reachable one is never
- * freed.
+ * freed.  ASan builds must run with ASAN_OPTIONS=detect_stack_use_after_return=0:
+ * locals moved to ASan's fake stack are invisible to this scan.
  *
  * Objects carry a GCHdr in front of the payload.  AST string literals are
  * allocated `perm` and never swept, so marking them is harmless and the AST
@@ -78,7 +79,7 @@ static void *grow(void *p, size_t *cap, size_t need, size_t esz) {
     size_t c = *cap ? *cap : 64;
     while (c < need) c *= 2;
     *cap = c;
-    return realloc(p, c * esz);
+    return xrealloc(p, c * esz);
 }
 
 /* ---------------------------------------------------------------- ranges */
@@ -113,7 +114,7 @@ static void build_ranges(void) {
     if (want != g_pgcap) {
         free(g_pgtab);
         g_pgcap = want;
-        g_pgtab = malloc(g_pgcap * sizeof(uint32_t));
+        g_pgtab = xmalloc(g_pgcap * sizeof(uint32_t));
     }
     memset(g_pgtab, 0, g_pgcap * sizeof(uint32_t));
     for (size_t i = 0; i < g_nrng; i++) {
@@ -303,11 +304,44 @@ size_t gc_stack_size(void) { return g_stack_size; }
 void gc_set_interp(Interp *it) { g_it = it; }
 Interp *gc_interp(void) { return g_it; }
 
+/* 메모리 한도(ulimit -v 등)에 닿아 malloc 이 NULL 을 주면 — 그대로 쓰면 SIGSEGV 다. g_error 로
+ * 되돌릴 수는 없다: 부르는 쪽 자료구조가 고치던 도중일 수 있다. 알리고 끝낸다(파이썬의
+ * MemoryError 도 시도/잡기로 잡히지 않고 프로그램을 끝낸다). */
+static void out_of_memory(void) __attribute__((noreturn));
+static void out_of_memory(void) {
+    fflush(stdout);
+    if (g_it) fprintf(stderr, "%s: [%d\xED\x96\x89] %s\n", STR_OORYU, g_it->cur_line, ERR_NO_MEMORY);
+    else fprintf(stderr, "%s: %s\n", STR_OORYU, ERR_NO_MEMORY);
+    exit(1);
+}
+
+void *xmalloc(size_t n) {
+    void *p = malloc(n);
+    if (!p && n) out_of_memory();
+    return p;
+}
+
+void *xcalloc(size_t n, size_t size) {
+    void *p = calloc(n, size);
+    if (!p && n && size) out_of_memory();
+    return p;
+}
+
+void *xrealloc(void *q, size_t n) {
+    void *p = realloc(q, n);
+    if (!p && n) out_of_memory();
+    return p;
+}
+
 void *gc_alloc(size_t size, int kind) {
     if (g_stress) {
         if (++g_ticks >= g_stress) { g_ticks = 0; gc_collect(); }
     } else if (g_since >= g_limit) gc_collect();
     GCHdr *h = malloc(sizeof(GCHdr) + size);
+    if (!h) {                   /* 쓰레기를 치우고 한 번 더 — 위의 수거와 같은 자리라 안전하다 */
+        gc_collect();
+        h = xmalloc(sizeof(GCHdr) + size);
+    }
     h->next = g_objs; g_objs = h;
     h->size = size; h->mark = 0; h->kind = (uint16_t)kind; h->perm = 0;
     g_since += sizeof(GCHdr) + size;
@@ -316,7 +350,7 @@ void *gc_alloc(size_t size, int kind) {
 
 /* never collected: ast literals live as long as the program text */
 void *gc_alloc_perm(size_t size, int kind) {
-    GCHdr *h = malloc(sizeof(GCHdr) + size);
+    GCHdr *h = xmalloc(sizeof(GCHdr) + size);
     h->next = g_objs; g_objs = h;
     h->size = size; h->mark = 0; h->kind = (uint16_t)kind; h->perm = 1;
     return BODY_OF(h);

@@ -154,6 +154,18 @@ static void emit_fail(CG *g, const char *msg) {
     g->term = 1;
 }
 
+/* 정수 + - * (op = sadd/ssub/smul): 64비트를 넘으면 인터프리터(num_add 등)처럼 멈춘다 */
+static CgV emit_checked(CG *g, const char *op, int x, int y) {
+    int p = newtmp(g), t = newtmp(g), o = newtmp(g), Lo = newlab(g), Lok = newlab(g);
+    E("  %%t%d = call { i64, i1 } @llvm.%s.with.overflow.i64(i64 %%t%d, i64 %%t%d)\n", p, op, x, y);
+    E("  %%t%d = extractvalue { i64, i1 } %%t%d, 0\n", t, p);
+    E("  %%t%d = extractvalue { i64, i1 } %%t%d, 1\n", o, p);
+    condbr(g, o, Lo, Lok);
+    label(g, Lo); emit_fail(g, ERR_INT_OVERFLOW);
+    label(g, Lok);
+    return (CgV){ t, TY_INT, 0 };
+}
+
 /* ---------------------------------------------------------------- 칸·묶음·확실한 대입 */
 static int new_slot(CG *g, const char *name, int ty, int fnlevel) {
     if (g->nslots == g->capslots) {
@@ -190,11 +202,11 @@ static void push_bind(CG *g, const char *name, int slot) {
 typedef struct { unsigned char *v; int n; } DSet;
 static DSet ds_save(CG *g) {
     DSet d = { malloc((size_t)g->nslots + 1), g->nslots };
-    memcpy(d.v, g->defd, (size_t)g->nslots);
+    if (g->nslots) memcpy(d.v, g->defd, (size_t)g->nslots);   /* 칸이 없으면 defd 는 NULL — memcpy(…, NULL, 0) 도 UB */
     return d;
 }
 static void ds_load(CG *g, DSet d) {
-    memcpy(g->defd, d.v, (size_t)d.n);
+    if (d.n) memcpy(g->defd, d.v, (size_t)d.n);
     for (int i = d.n; i < g->nslots; i++) g->defd[i] = 0;
 }
 static void ds_meet(CG *g, DSet d) {   /* 두 길 모두에서 대입된 것만 남긴다 */
@@ -338,9 +350,7 @@ static CgV emit_bin(CG *g, Node *n) {
     if (op == OP_ADD || op == OP_SUB || op == OP_MUL) {
         /* 참/거짓은 0/1 정수로 셈한다(num_add). 문자열 반복(* 수)은 미지원 */
         if (!is_num(a.ty) || !is_num(b.ty)) { cg_err(g, "LLVM: 문자열 셈 미지원 (행 %d)", n->line); return CG_BAD; }
-        int t = newtmp(g);
-        E("  %%t%d = %s i64 %%t%d, %%t%d\n", t, op == OP_ADD ? "add" : op == OP_SUB ? "sub" : "mul", a.t, b.t);
-        return (CgV){ t, TY_INT, 0 };
+        return emit_checked(g, op == OP_ADD ? "sadd" : op == OP_SUB ? "ssub" : "smul", a.t, b.t);
     }
     if (op == OP_MOD) {
         /* 참/거짓이 끼면 인터프리터는 실수(fmod)로 간다 */
@@ -451,9 +461,9 @@ static CgV emit_val(CG *g, Node *n) {
         CgV a = emit_val(g, n->a);
         if (a.t < 0) return CG_BAD;
         if (!is_num(a.ty)) { cg_err(g, "LLVM: 문자열에 단항 - (행 %d)", n->line); return CG_BAD; }
-        int t = newtmp(g);
-        E("  %%t%d = sub i64 0, %%t%d\n", t, a.t);
-        return (CgV){ t, TY_INT, 0 };
+        int z = newtmp(g);
+        E("  %%t%d = add i64 0, 0\n", z);
+        return emit_checked(g, "ssub", z, a.t);   /* -INT64_MIN 은 넘친다 */
     }
     case N_BIN: return emit_bin(g, n);
     case N_CALL: {
@@ -665,11 +675,14 @@ static void emit_for(CG *g, Node *n) {
     g->depth--;
     g->nbinds--;
     label(g, Li);
-    int c2 = newtmp(g), c3 = newtmp(g);
+    /* 다음 값이 64비트를 넘으면 끝을 지난 것 — 인터프리터처럼 끝낸다(감기면 영원히 돌았다) */
+    int c2 = newtmp(g), p = newtmp(g), c3 = newtmp(g), of = newtmp(g);
     E("  %%t%d = load i64, ptr %%v%d, align 8\n", c2, ctr);
-    E("  %%t%d = add i64 %%t%d, %%t%d\n", c3, c2, s.t);
+    E("  %%t%d = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %%t%d, i64 %%t%d)\n", p, c2, s.t);
+    E("  %%t%d = extractvalue { i64, i1 } %%t%d, 0\n", c3, p);
+    E("  %%t%d = extractvalue { i64, i1 } %%t%d, 1\n", of, p);
     E("  store i64 %%t%d, ptr %%v%d, align 8\n", c3, ctr);
-    br(g, Lc);
+    condbr(g, of, Le, Lc);
     ds_load(g, pre);
     free(pre.v);
     label(g, Le);
@@ -957,7 +970,10 @@ char *llvm_emit_module(Interp *it, Node *root, const char *src, char **errp) {
         "declare ptr @na_str_dup(ptr)\n"
         "declare void @na_str_free(ptr)\n"
         "declare i64 @na_str_eq(ptr, ptr)\n"
-        "declare i64 @na_str_cmp(ptr, ptr)\n\n");
+        "declare i64 @na_str_cmp(ptr, ptr)\n"
+        "declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)\n"
+        "declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)\n"
+        "declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)\n\n");
     buf_put(&out, funcs.p ? funcs.p : "", funcs.n);
     buf_put(&out, mainb.p ? mainb.p : "", mainb.n);
     free(funcs.p); free(mainb.p);

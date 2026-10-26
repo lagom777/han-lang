@@ -45,6 +45,10 @@ struct Str {
     char data[];                /* NUL-terminated UTF-8 */
 };
 
+/* 문자열(바이트)·목록(원소) 길이의 상한. len 이 32비트라 넘으면 감기거나 작은 버퍼에 큰
+ * 복사를 한다 — 만들기 전에 ERR_TOO_LONG 으로 막는다. 2^31 미만이라 두 길이의 합도 안 넘친다. */
+#define SEQ_MAX_LEN 0x7fffffff
+
 struct List {
     long n, cap;
     Value *items;
@@ -107,6 +111,10 @@ typedef struct {
     Value num;                  /* T_NUM */
     int line, col;
 } Tok;
+
+/* T_NUM 의 s 가 이것이면 리터럴 9223372036854775808(2^63) — 64비트에 안 담기므로 바로 앞에 단항 -
+ * 가 있을 때(최소정수)만 파서가 받는다. num 은 이미 INT64_MIN */
+extern const char LIT_2_63[];
 
 /* ---------------------------------------------------------------- errors */
 enum { GS_NONE = 0, GS_ERR = 1, GS_RET = 2, GS_BRK = 3, GS_CONT = 4 };
@@ -171,6 +179,10 @@ Interp *gc_interp(void);                    /* current interp (NULL before set) 
 void *gc_alloc(size_t size, int kind);      /* collectable heap value */
 void *gc_alloc_perm(size_t size, int kind); /* never collected */
 void gc_keep_alive(void *p);                /* pin a local across a call */
+/* malloc 류 — NULL 이면 '메모리가 부족합니다' 를 알리고 끝낸다(그대로 쓰면 SIGSEGV) */
+void *xmalloc(size_t n);
+void *xcalloc(size_t n, size_t size);
+void *xrealloc(void *p, size_t n);
 
 /* ---------------------------------------------------------------- value.c */
 Value v_nil(void);
@@ -181,10 +193,11 @@ Value v_str(Str *s);
 Value v_list(List *l);
 Value v_dict(Dict *d);
 
-Str *str_new(const char *data, uint32_t len);
+/* len 은 size_t — 32비트로 자르기 전에 SEQ_MAX_LEN 을 검사한다 */
+Str *str_new(const char *data, size_t len);
 Str *str_from(const char *cstr);
 Str *str_perm(const char *cstr);             /* uncollectable: ast literals */
-Str *str_own(char *data, uint32_t len);      /* takes ownership of malloc'd buf */
+Str *str_own(char *data, size_t len);        /* takes ownership of malloc'd buf */
 Str *str_concat(Str *a, Str *b);
 Str *str_concat3(Str *a, Str *b, Str *c);
 uint32_t str_cplen(Str *s);

@@ -57,7 +57,7 @@ test: ganada
 	@test -f $(GOLDEN_OK) || { echo "[golden] 검사 실패 — 통과표 없음 (작업폴더 남김: $(GOLDEN_WORK))"; exit 1; }
 	@rm -rf $(GOLDEN_WORK)
 	@rm -rf $(SEC_WORK)
-	@GANADA_SEC_WORK=$(SEC_WORK) GANADA_SEC_OK=$(SEC_OK) $(GANADA_BIN) 실행 tests/보안회귀.ㄱㄴㄷ || true
+	@GANADA_BIN=$(GANADA_BIN) GANADA_SEC_WORK=$(SEC_WORK) GANADA_SEC_OK=$(SEC_OK) $(GANADA_BIN) 실행 tests/보안회귀.ㄱㄴㄷ || true
 	@test -f $(SEC_OK) || { echo "[보안회귀] 검사 실패 — 통과표 없음 (작업폴더 남김: $(SEC_WORK))"; exit 1; }
 	@rm -rf $(SEC_WORK)
 	@rm -rf $(NATIVE_WORK)

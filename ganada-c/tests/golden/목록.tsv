@@ -1,6 +1,6 @@
 # 골든 코퍼스 인덱스 — tools/골든생성.py 가 만든다. 탭 구분. # 로 시작하는 줄은 주석.
 # 구분	이름	검사	코드	소스	기대	입력	작업	유래
-합계	케이스=311	예제=83	0	-	-	-	-	생성기가 기록한 총계
+합계	케이스=315	예제=83	0	-	-	-	-	생성기가 기록한 총계
 케이스	0001_test_hello	출력	0	ganada-c/tests/golden/케이스/0001_test_hello.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0001_test_hello.기대	-	ganada-c/tests/golden/케이스	test_hello
 케이스	0002_test_arith_and_concat	출력	0	ganada-c/tests/golden/케이스/0002_test_arith_and_concat.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0002_test_arith_and_concat.기대	-	ganada-c/tests/golden/케이스	test_arith_and_concat
 케이스	0003_test_arith_and_concat	출력	0	ganada-c/tests/golden/케이스/0003_test_arith_and_concat.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0003_test_arith_and_concat.기대	-	ganada-c/tests/golden/케이스	test_arith_and_concat
@@ -312,6 +312,10 @@
 케이스	0309_test_색칠	오류포함	1	ganada-c/tests/golden/케이스/0309_test_색칠.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0309_test_색칠.오류	-	ganada-c/tests/golden/케이스	test_색칠
 케이스	0310_test_입력_EOF없음	출력	0	ganada-c/tests/golden/케이스/0310_test_입력_EOF없음.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0310_test_입력_EOF없음.기대	-	ganada-c/tests/golden/케이스	test_입력_EOF없음
 케이스	0311_test_입력_EOF없음	출력	0	ganada-c/tests/golden/케이스/0311_test_입력_EOF없음.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0311_test_입력_EOF없음.기대	ganada-c/tests/golden/케이스/0311_test_입력_EOF없음.입력	ganada-c/tests/golden/케이스	test_입력_EOF없음
+케이스	0312_test_최소정수_리터럴	출력	0	ganada-c/tests/golden/케이스/0312_test_최소정수_리터럴.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0312_test_최소정수_리터럴.기대	-	ganada-c/tests/golden/케이스	test_최소정수_리터럴
+케이스	0313_test_큰_정수값_실수	출력	0	ganada-c/tests/golden/케이스/0313_test_큰_정수값_실수.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0313_test_큰_정수값_실수.기대	-	ganada-c/tests/golden/케이스	test_큰_정수값_실수
+케이스	0314_test_큰_정수값_실수	출력	0	ganada-c/tests/golden/케이스/0314_test_큰_정수값_실수.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0314_test_큰_정수값_실수.기대	-	ganada-c/tests/golden/케이스	test_큰_정수값_실수
+케이스	0315_test_자료_셈_경계	출력	0	ganada-c/tests/golden/케이스/0315_test_자료_셈_경계.ㄱㄴㄷ	ganada-c/tests/golden/케이스/0315_test_자료_셈_경계.기대	-	ganada-c/tests/golden/케이스	test_자료_셈_경계
 예제	ai	출력	0	examples/ai.ㄱㄴㄷ	ganada-c/tests/golden/예제/ai.기대	-	임시	ai.ㄱㄴㄷ
 예제	ai_classify	출력	0	examples/ai_classify.ㄱㄴㄷ	ganada-c/tests/golden/예제/ai_classify.기대	-	임시	ai_classify.ㄱㄴㄷ
 예제	ai_extract	출력	0	examples/ai_extract.ㄱㄴㄷ	ganada-c/tests/golden/예제/ai_extract.기대	-	임시	ai_extract.ㄱㄴㄷ

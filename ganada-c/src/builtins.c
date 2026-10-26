@@ -16,15 +16,15 @@
 /* ---------------------------------------------------------------- helpers */
 typedef struct { char *p; size_t n, cap; } GB;
 
-static void gb_init(GB *b) { b->cap = 128; b->n = 0; b->p = malloc(b->cap); b->p[0] = 0; }
+static void gb_init(GB *b) { b->cap = 128; b->n = 0; b->p = xmalloc(b->cap); b->p[0] = 0; }
 static void gb_put(GB *b, const char *s, size_t n) {
-    if (b->n + n + 1 > b->cap) { while (b->n + n + 1 > b->cap) b->cap *= 2; b->p = realloc(b->p, b->cap); }
+    if (b->n + n + 1 > b->cap) { while (b->n + n + 1 > b->cap) b->cap *= 2; b->p = xrealloc(b->p, b->cap); }
     memcpy(b->p + b->n, s, n); b->n += n; b->p[b->n] = 0;
 }
 static void gb_cz(GB *b, const char *s) { gb_put(b, s, strlen(s)); }
 static void gb_str(GB *b, Str *s) { gb_put(b, s->data, s->len); }
 static void gb_ch(GB *b, char c) { gb_put(b, &c, 1); }
-static Str *gb_done(GB *b) { return str_own(b->p, (uint32_t)b->n); }
+static Str *gb_done(GB *b) { return str_own(b->p, b->n); }
 
 static Value need_arg(Interp *it, Value *args, int n, int i, const char *fn) {
     if (i >= n) g_error(it, FMT_CALL_ERR, fn, "missing argument");
@@ -37,11 +37,19 @@ static double num_d(Value v) {
     return v.tag == VT_INT ? (double)v.as.i : v.tag == VT_BOOL ? (double)v.as.b : v.as.f;
 }
 
+/* 실수 → 정수(버림). 64비트 밖·무한·NaN 은 C 변환이 UB 다(x86 은 최소정수, arm 은 끝값으로
+ * 플랫폼마다 다른 쓰레기값) — 담을 수 없으니 오류 */
+static int64_t f2i(Interp *it, double f, const char *fn) {
+    if (!(f >= -9223372036854775808.0 && f < 9223372036854775808.0))
+        g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
+    return (int64_t)f;
+}
+
 /* python int(): trunc float, parse str, bool -> 0/1 */
 static int64_t to_int64(Interp *it, Value v, const char *fn) {
     if (v.tag == VT_INT) return v.as.i;
     if (v.tag == VT_BOOL) return v.as.b;
-    if (v.tag == VT_FLOAT) return (int64_t)v.as.f;
+    if (v.tag == VT_FLOAT) return f2i(it, v.as.f, fn);
     if (v.tag == VT_STR) {
         Str *s = v.as.s;
         char *buf = malloc(s->len + 1);
@@ -51,9 +59,11 @@ static int64_t to_int64(Interp *it, Value v, const char *fn) {
         char *end;
         errno = 0;
         long long r = strtoll(p, &end, 10);
+        int range = errno == ERANGE;     /* strtoll 은 끝값으로 붙인다 — free 전에 읽어 둔다 */
         while (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r' || *end == '\v' || *end == '\f') end++;
         if (end == p || *end) { free(buf); g_error(it, FMT_CALL_ERR, fn, "invalid literal for int()"); }
         free(buf);
+        if (range) g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
         return (int64_t)r;
     }
     g_error(it, FMT_CALL_ERR, fn, "not a number");
@@ -181,7 +191,7 @@ static Value b_number(Interp *it, Value *args, int n) {
         if (memchr(v.as.s->data, '.', v.as.s->len)) return v_float(to_float(it, v, fn));
         return v_int(to_int64(it, v, fn));
     }
-    if (v.tag == VT_FLOAT) return v_int((int64_t)v.as.f);
+    if (v.tag == VT_FLOAT) return v_int(f2i(it, v.as.f, fn));
     if (v.tag == VT_BOOL) return v_int(v.as.b);
     if (v.tag == VT_INT) return v;
     g_error(it, FMT_CALL_ERR, fn, "not a number");
@@ -201,7 +211,8 @@ static Value b_sum(Interp *it, Value *args, int n) {
         if (!is_num(v)) g_error(it, FMT_CALL_ERR, BUILTIN_NAMES[B_HAB], "unsupported operand");
         if (v.tag == VT_FLOAT) anyfloat = 1;
         if (anyfloat) fsum += num_d(v);
-        else isum += v.tag == VT_INT ? v.as.i : v.as.b;
+        else if (__builtin_add_overflow(isum, v.tag == VT_INT ? v.as.i : (int64_t)v.as.b, &isum))
+            g_error(it, FMT_CALL_ERR, BUILTIN_NAMES[B_HAB], ERR_INT_OVERFLOW);
     }
     if (anyfloat) return v_float(fsum + (double)isum);
     return v_int(isum);
@@ -326,8 +337,11 @@ static Value b_range(Interp *it, Value *args, int n) {
     else g_error(it, FMT_CALL_ERR, fn, "missing argument");
     if (step == 0) g_error(it, FMT_CALL_ERR, fn, "step cannot be zero");
     List *out = list_new(8);
-    if (step > 0) for (int64_t i = a; i < b; i += step) list_push(out, v_int(i));
-    else for (int64_t i = a; i > b; i += step) list_push(out, v_int(i));
+    /* 다음 값이 64비트를 넘으면 끝을 지난 것 — 감기면 끝없이 돌았다(범위(최대-7, 최대, 5)) */
+    for (int64_t i = a; step > 0 ? i < b : i > b; ) {
+        list_push(out, v_int(i));
+        if (__builtin_add_overflow(i, step, &i)) break;
+    }
     return v_list(out);
 }
 
@@ -585,6 +599,7 @@ static Value b_type(Interp *it, Value *args, int n) {
 static Value b_abs(Interp *it, Value *args, int n) {
     const char *fn = BUILTIN_NAMES[B_JEOLDAESGABS];
     Value v = need_arg(it, args, n, 0, fn);
+    if (v.tag == VT_INT && v.as.i == INT64_MIN) g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
     if (v.tag == VT_INT) return v_int(v.as.i < 0 ? -v.as.i : v.as.i);
     if (v.tag == VT_FLOAT) return v_float(fabs(v.as.f));
     if (v.tag == VT_BOOL) return v_int(v.as.b);
@@ -695,7 +710,7 @@ static Value b_round(Interp *it, Value *args, int n) {
     if (x.tag == VT_INT) snprintf(buf, sizeof buf, "%lld", (long long)x.as.i);
     else if (x.tag == VT_BOOL) snprintf(buf, sizeof buf, "%d", x.as.b);
     else if (x.tag == VT_FLOAT) {
-        if (isinf(x.as.f) || isnan(x.as.f)) return n > 1 ? x : v_int((int64_t)x.as.f);
+        if (isinf(x.as.f) || isnan(x.as.f)) return n > 1 ? x : v_int(f2i(it, x.as.f, fn));
         fmt_float(x.as.f, buf);
     } else g_error(it, FMT_CALL_ERR, fn, "not a number");
     char out[160];
@@ -823,7 +838,7 @@ static Value b_input(Interp *it, Value *args, int n) {
     ssize_t r = getline(&line, &cap, stdin);
     if (r < 0) { free(line); return v_nil(); }
     while (r > 0 && line[r - 1] == '\n') line[--r] = 0;
-    return v_str(str_own(line, (uint32_t)r));
+    return v_str(str_own(line, (size_t)r));
 }
 
 static Value b_readfile(Interp *it, Value *args, int n) {
@@ -831,7 +846,7 @@ static Value b_readfile(Interp *it, Value *args, int n) {
     Str *p = v_stringify(need_arg(it, args, n, 0, fn));
     char *src = read_file_utf8(p->data);
     if (!src) g_error(it, ERR_FILE_READ, p->data);
-    return v_str(str_own(src, (uint32_t)strlen(src)));
+    return v_str(str_own(src, strlen(src)));
 }
 
 static Value write_common(Interp *it, Value *args, int n, const char *mode, const char *fn) {
@@ -965,7 +980,7 @@ static Value b_copy(Interp *it, Value *args, int n) {
     char buf[8192]; size_t r;
     while ((r = fread(buf, 1, sizeof buf, fi)) > 0) fwrite(buf, 1, r, fo);
     fclose(fi); fclose(fo);
-    return v_str(str_own(final, (uint32_t)strlen(final)));
+    return v_str(str_own(final, strlen(final)));
 }
 
 static Value b_rename(Interp *it, Value *args, int n) {
@@ -1400,8 +1415,9 @@ static Value b_cumsum(Interp *it, Value *args, int n, int isprod) {
             else fa += num_d(v);
             list_push(out, v_float(fa));
         } else {
-            if (isprod) ia *= (v.tag == VT_INT ? v.as.i : v.as.b);
-            else ia += (v.tag == VT_INT ? v.as.i : v.as.b);
+            int64_t x = v.tag == VT_INT ? v.as.i : v.as.b;
+            if (isprod ? __builtin_mul_overflow(ia, x, &ia) : __builtin_add_overflow(ia, x, &ia))
+                g_error(it, FMT_CALL_ERR, fn, ERR_INT_OVERFLOW);
             list_push(out, v_int(ia));
         }
     }
@@ -1514,6 +1530,7 @@ static Value pad_common(Interp *it, Value *args, int n, int mode, const char *fn
     int64_t len = (int64_t)str_cplen(s);
     if (len >= width) return v_str(s);
     int64_t marg = width - len, left, right;
+    if (marg > (SEQ_MAX_LEN - (int64_t)s->len) / (int64_t)fadv) G_ERR0(it, ERR_TOO_LONG);
     if (mode == 0) { left = marg; right = 0; }          /* rjust */
     else if (mode == 1) { left = 0; right = marg; }     /* ljust */
     else { left = marg / 2 + (marg & width & 1); right = marg - left; }  /* center */
@@ -1534,7 +1551,7 @@ static Str *ai_stub(Str *content) {
     size_t need = strlen(STR_AI_NO_KEY) + cut->len + 8;
     char *buf = malloc(need);
     snprintf(buf, need, STR_AI_NO_KEY, cut->data);
-    return str_own(buf, (uint32_t)strlen(buf));
+    return str_own(buf, strlen(buf));
 }
 
 static Value b_ai_q(Interp *it, Value *args, int n) {
@@ -3026,6 +3043,14 @@ static Cell row_cell(DbRow *r, int col) {
     return col < 0 ? cell_int(r->rowid) : cell_dup(&r->cells[col]);
 }
 
+/* sqlite3VdbeIntValue 의 실수 → 정수: 범위 밖은 끝값으로 붙인다(C 의 변환은 UB). NaN 은 0 */
+static int64_t sq_d2i(double d) {
+    if (d != d) return 0;
+    if (d <= -9223372036854775808.0) return INT64_MIN;
+    if (d >= 9223372036854775807.0) return INT64_MAX;
+    return (int64_t)d;
+}
+
 static void cell_num(const Cell *c, int64_t *ip, double *fp, int *isint) {
     if (c->kind == CELL_INT) { *ip = c->i; *isint = 1; return; }
     if (c->kind == CELL_REAL) { *fp = c->f; *isint = 0; return; }
@@ -3044,7 +3069,8 @@ static Cell ex_eval(SqlEx *e, DbRow *r) {
             if (a.kind != CELL_NULL) {
                 int64_t i = 0; double f = 0; int isint = 0;
                 cell_num(&a, &i, &f, &isint);
-                out = isint ? cell_int(-i) : cell_real(-f);
+                /* sqlite: -최소정수 는 넘쳐서 실수로 간다 */
+                out = isint && i != INT64_MIN ? cell_int(-i) : cell_real(isint ? -(double)i : -f);
             }
             break;
         case SO_NOT: if (a.kind != CELL_NULL) out = cell_int(!cell_truth(&a)); break;
@@ -3086,25 +3112,38 @@ static Cell ex_eval(SqlEx *e, DbRow *r) {
         int64_t ai = 0, bi = 0; double af = 0, bf = 0; int aint = 0, bint = 0;
         cell_num(&a, &ai, &af, &aint);
         cell_num(&b, &bi, &bf, &bint);
-        int divzero = (e->op == SO_DIV || e->op == SO_MOD) && (bint ? bi == 0 : bf == 0);
-        if (!divzero) {
-            if (aint && bint) {
-                switch (e->op) {
-                case SO_ADD: out = cell_int(ai + bi); break;
-                case SO_SUB: out = cell_int(ai - bi); break;
-                case SO_MUL: out = cell_int(ai * bi); break;
-                case SO_DIV: out = cell_int(ai / bi); break;   /* integer division */
-                default: out = cell_int(ai % bi);
-                }
-            } else {
-                double x = aint ? (double)ai : af, y = bint ? (double)bi : bf;
-                switch (e->op) {
-                case SO_ADD: out = cell_real(x + y); break;
-                case SO_SUB: out = cell_real(x - y); break;
-                case SO_MUL: out = cell_real(x * y); break;
-                case SO_DIV: out = cell_real(x / y); break;
-                default: out = cell_int((int64_t)x % (int64_t)y);
-                }
+        /* sqlite(vdbe.c) 그대로: 정수 + - * 가 넘치면 실수로, 0 으로 나누면 NULL, 최소정수 / -1 은
+         * 실수로, % 는 양쪽을 정수로 바꾸고 -1 은 1 로. C 의 / % 는 최소정수 / -1 이나 a % 0.5
+         * (정수로 바꾸면 0)에서 SIGFPE 로 프로세스째 죽었다 — ? 로 받은 사용자 값으로도. */
+        int64_t r = 0;
+        int real = !(aint && bint), null = 0;
+        if (!real) {
+            switch (e->op) {
+            case SO_ADD: real = __builtin_add_overflow(ai, bi, &r); break;
+            case SO_SUB: real = __builtin_sub_overflow(ai, bi, &r); break;
+            case SO_MUL: real = __builtin_mul_overflow(ai, bi, &r); break;
+            case SO_DIV:                                  /* integer division */
+                if (bi == 0) null = 1;
+                else if (ai == INT64_MIN && bi == -1) real = 1;
+                else r = ai / bi;
+                break;
+            default:
+                if (bi == 0) null = 1;
+                else r = bi == -1 ? 0 : ai % bi;
+            }
+            if (!real && !null) out = cell_int(r);
+        }
+        if (real) {
+            double x = aint ? (double)ai : af, y = bint ? (double)bi : bf;
+            switch (e->op) {
+            case SO_ADD: out = cell_real(x + y); break;
+            case SO_SUB: out = cell_real(x - y); break;
+            case SO_MUL: out = cell_real(x * y); break;
+            case SO_DIV: if (y != 0) out = cell_real(x / y); break;
+            default: {
+                int64_t ia = sq_d2i(x), ib = sq_d2i(y);
+                if (ib != 0) out = cell_real((double)(ib == -1 ? 0 : ia % ib));
+            }
             }
         }
     }
@@ -4128,7 +4167,7 @@ static Str *srv_header(char *req, size_t hdrend, const char *name) {
             while (*p == ' ' || *p == '\t') p++;
             const char *e = p;
             while (e < req + hdrend && *e != '\r' && *e != '\n') e++;
-            return str_new(p, (uint32_t)(e - p));
+            return str_new(p, (size_t)(e - p));
         }
     return NULL;
 }
@@ -4186,7 +4225,7 @@ static int srv_one(Interp *it, int fd, Dict *routes, Str *staticdir) {
     Dict *query = qmark ? parse_qs(qmark + 1, (uint32_t)strlen(qmark + 1)) : dict_new();
     Str *ctype = srv_header(req, hdrend, "content-type:");
     Str *cookie = srv_header(req, hdrend, "cookie:");
-    Str *body = str_new(req + hdrend, (uint32_t)(total - hdrend));
+    Str *body = str_new(req + hdrend, total - hdrend);
     if (!strcmp(method, "POST") && ctype
         && !strncmp(ctype->data, "application/x-www-form-urlencoded", 33)) {
         Dict *form = parse_qs(body->data, body->len);    /* form fields join 질의, body wins */
