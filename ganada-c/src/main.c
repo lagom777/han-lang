@@ -373,16 +373,26 @@ static int find_na_rt(char *out, size_t outsz) {
     return -1;
 }
 
+/* 기다리는 동안 받은 SIGINT/SIGQUIT (0 = 없음) */
+static volatile sig_atomic_t g_got_sig;
+static void note_sig(int sig) { g_got_sig = sig; }
+
 /* 셸을 거치지 않고 실행한다 — 경로의 빈칸·따옴표·; 가 명령으로 읽히지 않게.
- * system() 처럼 기다리는 동안 SIGINT/SIGQUIT 는 자식만 받는다. quiet: 자식의 stdout/stderr 를 버린다.
+ * 기다리는 동안 SIGINT/SIGQUIT 는 자식이 받아 끝나고, 부모는 죽지 않고 받았다는 것만
+ * g_got_sig 에 적는다 — 임시 폴더를 치운 뒤 같은 신호로 끝내야 하고, Ctrl-C 로 죽은 clang 을
+ * "컴파일 실패" 로 보고 인터프리터로 넘어가면 안 된다. quiet: 자식의 stdout/stderr 를 버린다.
  * 반환: waitpid 상태, 실행 실패는 -1. */
 static int spawn_wait(char *const argv[], int quiet) {
-    struct sigaction ign, oint, oquit;
-    memset(&ign, 0, sizeof ign);
-    ign.sa_handler = SIG_IGN;
-    sigemptyset(&ign.sa_mask);
-    sigaction(SIGINT, &ign, &oint);
-    sigaction(SIGQUIT, &ign, &oquit);
+    struct sigaction note, oint, oquit;
+    memset(&note, 0, sizeof note);
+    note.sa_handler = note_sig;
+    sigemptyset(&note.sa_mask);
+    g_got_sig = 0;
+    sigaction(SIGINT, NULL, &oint);
+    sigaction(SIGQUIT, NULL, &oquit);
+    /* 처음부터 무시하던 신호(셸의 백그라운드 실행 등)는 계속 무시한다 */
+    if (oint.sa_handler != SIG_IGN) sigaction(SIGINT, &note, NULL);
+    if (oquit.sa_handler != SIG_IGN) sigaction(SIGQUIT, &note, NULL);
     int st = -1;
     pid_t pid = fork();
     if (pid == 0) {
@@ -401,6 +411,13 @@ static int spawn_wait(char *const argv[], int quiet) {
     sigaction(SIGINT, &oint, NULL);
     sigaction(SIGQUIT, &oquit, NULL);
     return st;
+}
+
+/* 인터프리터로 돌았다면 이 프로세스가 그 신호로 끝났다(Ctrl-C·파이프 끊김) — 똑같이 끝낸다 */
+static int die_by(int sig) {
+    signal(sig, SIG_DFL);
+    raise(sig);
+    return 128 + sig;
 }
 
 /* LLVM 경로 모드:
@@ -510,6 +527,11 @@ static int compile_llvm(const char *path, int mode) {
         fprintf(stderr, "clang → %s (+ na_rt)\n", outbin);
     char *cc_argv[] = { "clang", "-O2", "-Wno-override-module", "-o", outbin, outll, nart, NULL };
     int st = spawn_wait(cc_argv, try_mode);
+    if (g_got_sig) {   /* 컴파일 도중 Ctrl-C — 폴백해서 프로그램을 돌리면 안 된다 */
+        if (try_mode) { unlink(outll); unlink(outbin); rmdir(tmpdir); }
+        free(ir); free(src);
+        return die_by(g_got_sig);
+    }
     if (st == -1 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) {
         if (try_mode) {
             unlink(outll); unlink(outbin); rmdir(tmpdir);
@@ -529,18 +551,13 @@ static int compile_llvm(const char *path, int mode) {
     fflush(stdout);
     char *run_argv[] = { runbin, NULL };
     st = spawn_wait(run_argv, 0);
+    int sig = g_got_sig ? g_got_sig : (st != -1 && WIFSIGNALED(st)) ? WTERMSIG(st) : 0;
     if (try_mode) {
         unlink(outll); unlink(outbin); rmdir(tmpdir);
     }
     free(ir); free(src);
+    if (sig) return die_by(sig);
     if (st == -1) return 1;
-    if (WIFSIGNALED(st)) {
-        /* 인터프리터로 돌았다면 이 프로세스가 그 신호로 끝났다(파이프 끊김·Ctrl-C) — 똑같이 */
-        int sig = WTERMSIG(st);
-        signal(sig, SIG_DFL);
-        raise(sig);
-        return 128 + sig;
-    }
     return WEXITSTATUS(st);
 }
 
