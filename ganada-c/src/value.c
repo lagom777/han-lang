@@ -11,14 +11,24 @@ Value v_list(List *l) { Value v; v.tag = VT_LIST; v.as.l = l; return v; }
 Value v_dict(Dict *d) { Value v; v.tag = VT_DICT; v.as.d = d; return v; }
 
 /* ---------------------------------------------------------------- strings */
-Str *str_new(const char *data, uint32_t len) {
+/* 길이는 64비트로 재서 넘기 전에 막는다 — 넘으면 len 이 감기고, str_concat3 는 작은 버퍼에 큰 복사를 했다 */
+static void check_len(uint64_t len) {
+    if (len <= SEQ_MAX_LEN) return;
+    Interp *it = gc_interp();
+    if (it) g_error(it, "%s", ERR_TOO_LONG);
+    fprintf(stderr, "fatal: string too long\n");
+    exit(2);
+}
+
+Str *str_new(const char *data, size_t len) {
+    check_len(len);
     Str *s = gc_alloc(sizeof(Str) + len + 1, GC_STR);
-    s->len = len; s->cplen = UINT32_MAX; s->flags = 0;
+    s->len = (uint32_t)len; s->cplen = UINT32_MAX; s->flags = 0;
     memcpy(s->data, data, len); s->data[len] = 0;
     return s;
 }
 
-Str *str_from(const char *cstr) { return str_new(cstr, (uint32_t)strlen(cstr)); }
+Str *str_from(const char *cstr) { return str_new(cstr, strlen(cstr)); }
 
 Str *str_perm(const char *cstr) {
     uint32_t len = (uint32_t)strlen(cstr);
@@ -28,15 +38,17 @@ Str *str_perm(const char *cstr) {
     return s;
 }
 
-Str *str_own(char *data, uint32_t len) {
+Str *str_own(char *data, size_t len) {
+    if (len > SEQ_MAX_LEN) { free(data); check_len(len); }
     Str *s = gc_alloc(sizeof(Str) + len + 1, GC_STR);
-    s->len = len; s->cplen = UINT32_MAX; s->flags = 0;
+    s->len = (uint32_t)len; s->cplen = UINT32_MAX; s->flags = 0;
     memcpy(s->data, data, len); s->data[len] = 0;
     free(data);
     return s;
 }
 
 Str *str_concat(Str *a, Str *b) {
+    check_len((uint64_t)a->len + b->len);
     Str *s = gc_alloc(sizeof(Str) + a->len + b->len + 1, GC_STR);
     s->len = a->len + b->len; s->cplen = UINT32_MAX;
     s->flags = a->flags & b->flags;      /* html only if both html */
@@ -47,6 +59,7 @@ Str *str_concat(Str *a, Str *b) {
 }
 
 Str *str_concat3(Str *a, Str *b, Str *c) {
+    check_len((uint64_t)a->len + b->len + c->len);
     uint32_t n = a->len + b->len + c->len;
     Str *s = gc_alloc(sizeof(Str) + n + 1, GC_STR);
     s->len = n; s->cplen = UINT32_MAX;
@@ -109,7 +122,7 @@ long str_cp_byteoff(Str *s, long cpidx) {
 Str *str_sub_cp(Str *s, long a, long b) {
     long ba = str_cp_byteoff(s, a), bb = str_cp_byteoff(s, b);
     if (bb < ba) bb = ba;
-    Str *r = str_new(s->data + ba, (uint32_t)(bb - ba));
+    Str *r = str_new(s->data + ba, (size_t)(bb - ba));
     r->flags = s->flags;
     return r;
 }
@@ -117,17 +130,22 @@ Str *str_sub_cp(Str *s, long a, long b) {
 Str *str_char_at(Str *s, long cpidx) { return str_sub_cp(s, cpidx, cpidx + 1); }
 
 /* ---------------------------------------------------------------- lists */
+/* cap 은 미리 잡을 양의 힌트일 뿐이다. 사용자 수(상위·묶음의 n, 생성의 개수)가 그대로 오면
+ * sizeof(Value) * cap 이 넘쳐 작은 버퍼를 잡고 그 너머에 썼다(상위(목록, 2**60)). 많이
+ * 미리 잡지 않는다 — 넘는 만큼은 list_push 가 늘린다. */
+#define LIST_PREALLOC_MAX (1L << 16)
+
 List *list_new(long cap) {
     List *l = gc_alloc(sizeof(List), GC_LIST);
-    l->n = 0; l->cap = cap > 4 ? cap : 4;
-    l->items = malloc(sizeof(Value) * l->cap);
+    l->n = 0; l->cap = cap < 4 ? 4 : cap > LIST_PREALLOC_MAX ? LIST_PREALLOC_MAX : cap;
+    l->items = xmalloc(sizeof(Value) * l->cap);
     return l;
 }
 
 void list_push(List *l, Value v) {
     if (l->n == l->cap) {
         l->cap *= 2;
-        l->items = realloc(l->items, sizeof(Value) * l->cap);
+        l->items = xrealloc(l->items, sizeof(Value) * l->cap);
     }
     l->items[l->n++] = v;
 }
@@ -151,8 +169,8 @@ static uint64_t key_hash(Value k) {
     case VT_INT: return mix64((uint64_t)k.as.i + 0x9e3779b9ULL);
     case VT_FLOAT: {
         double f = k.as.f;
-        if (f == floor(f) && fabs(f) < 9.0e18)
-            return mix64((uint64_t)(int64_t)f + 0x9e3779b9ULL);   /* 1.0 == 1 */
+        if (f == floor(f) && f >= -9223372036854775808.0 && f < 9223372036854775808.0)
+            return mix64((uint64_t)(int64_t)f + 0x9e3779b9ULL);   /* 1.0 == 1 (int64 범위 전부) */
         uint64_t u; memcpy(&u, &f, 8);
         return mix64(u ^ 0x51ed275bULL);
     }
@@ -165,7 +183,7 @@ static uint64_t key_hash(Value k) {
 static void dict_rehash(Dict *d, uint32_t ncap) {
     free(d->idx);
     d->icap = ncap;
-    d->idx = calloc(d->icap, sizeof(uint32_t));
+    d->idx = xcalloc(d->icap, sizeof(uint32_t));
     for (long i = 0; i < d->n; i++) {
         uint64_t h = key_hash(d->items[i].key);
         uint32_t m = d->icap - 1, p = (uint32_t)h & m;
@@ -177,8 +195,8 @@ static void dict_rehash(Dict *d, uint32_t ncap) {
 Dict *dict_new(void) {
     Dict *d = gc_alloc(sizeof(Dict), GC_DICT);
     d->n = 0; d->cap = 8;
-    d->items = malloc(sizeof(DEntry) * d->cap);
-    d->icap = 16; d->idx = calloc(d->icap, sizeof(uint32_t));
+    d->items = xmalloc(sizeof(DEntry) * d->cap);
+    d->icap = 16; d->idx = xcalloc(d->icap, sizeof(uint32_t));
     return d;
 }
 
@@ -198,7 +216,7 @@ void dict_set(Dict *d, Value key, Value val) {
     if (pos >= 0) { d->items[pos].val = val; return; }
     if (d->n == d->cap) {
         d->cap *= 2;
-        d->items = realloc(d->items, sizeof(DEntry) * d->cap);
+        d->items = xrealloc(d->items, sizeof(DEntry) * d->cap);
     }
     if ((d->n + 1) * 10 >= d->icap * 7) dict_rehash(d, d->icap * 2);
     d->items[d->n].key = key;
@@ -366,7 +384,7 @@ static void ss_cycle(void) {
 static void sb_put(SBuf *b, const char *s, size_t n) {
     if (b->n + n + 1 > b->cap) {
         while (b->n + n + 1 > b->cap) b->cap *= 2;
-        b->p = realloc(b->p, b->cap);
+        b->p = xrealloc(b->p, b->cap);
     }
     memcpy(b->p + b->n, s, n); b->n += n; b->p[b->n] = 0;
 }
@@ -381,6 +399,12 @@ static void stringify_into(SBuf *b, Value v) {
     case VT_FLOAT:
         if (v.as.f == floor(v.as.f) && fabs(v.as.f) < 9.0e18) {
             snprintf(tmp, sizeof tmp, "%lld", (long long)v.as.f);
+        } else if (isfinite(v.as.f) && v.as.f == floor(v.as.f)) {
+            /* 파이썬은 정수값 실수를 크기와 상관없이 str(int(v)) 로 쓴다(1e20 → 1000…0, C 는 1e+20 이었다).
+             * 정수값 double 의 %.0f 는 그 정확한 십진 전개다 — 최대 309자리 */
+            char big[330];
+            snprintf(big, sizeof big, "%.0f", v.as.f);
+            sb_cz(b, big); return;
         } else {
             fmt_float(v.as.f, tmp);
         }
@@ -425,11 +449,11 @@ static void stringify_into(SBuf *b, Value v) {
 Str *v_stringify(Value v) {
     /* longjmp on cycle skips ss_pop — always reset at entry */
     ss_reset();
-    SBuf b = { malloc(64), 0, 64 };
+    SBuf b = { xmalloc(64), 0, 64 };
     b.p[0] = 0;
     stringify_into(&b, v);
     ss_reset();
-    return str_own(b.p, (uint32_t)b.n);
+    return str_own(b.p, b.n);
 }
 
 /* ---------------------------------------------------------------- interning */

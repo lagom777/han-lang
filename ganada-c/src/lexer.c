@@ -1,6 +1,9 @@
 /* lexer.c — tokenizer (utf8 aware) */
 #include "ganada.h"
 #include <ctype.h>
+#include <errno.h>
+
+const char LIT_2_63[] = "9223372036854775808";
 
 static int is_id_start_cp(uint32_t cp) {
     if (cp == '_' || (cp < 0x80 && isalpha((int)cp))) return 1;
@@ -93,13 +96,29 @@ Tok *lex_all(Interp *it, const char *src, int *ntoks) {
                 j++;
             }
             if (n == cap) { cap *= 2; toks = realloc(toks, sizeof(Tok) * cap); }
-            char tmp[64];
-            size_t tl = j - i; if (tl > 63) tl = 63;
+            /* 긴 리터럴도 자르지 않는다 — 63자에서 잘라 100자리 실수가 1e62 가 됐다 */
+            size_t tl = j - i;
+            char sbuf[64], *tmp = tl < sizeof sbuf ? sbuf : xmalloc(tl + 1);
             memcpy(tmp, src + i, tl); tmp[tl] = 0;
             toks[n].kind = T_NUM; toks[n].s = NULL;
+            toks[n].line = line; toks[n].col = cp_col(src + bol, i - bol);
             if (dot) { toks[n].num.tag = VT_FLOAT; toks[n].num.as.f = strtod(tmp, NULL); }
-            else { toks[n].num.tag = VT_INT; toks[n].num.as.i = strtoll(tmp, NULL, 10); }
-            toks[n].line = line; toks[n].col = cp_col(src + bol, i - bol); n++;
+            else {
+                /* 64비트를 넘는 정수: strtoll 은 끝값으로 붙여서 조용히 틀린 수가 됐다 */
+                errno = 0;
+                toks[n].num.tag = VT_INT; toks[n].num.as.i = strtoll(tmp, NULL, 10);
+                if (errno == ERANGE) {
+                    const char *d = tmp;
+                    while (*d == '0' && d[1]) d++;
+                    if (strcmp(d, LIT_2_63)) {
+                        if (tmp != sbuf) free(tmp);
+                        g_error(it, ERR_INT_LITERAL, toks[n].line, toks[n].col);
+                    }
+                    toks[n].num.as.i = INT64_MIN; toks[n].s = LIT_2_63;
+                }
+            }
+            if (tmp != sbuf) free(tmp);
+            n++;
             i = j; continue;
         }
         /* identifier / keyword (utf8) */

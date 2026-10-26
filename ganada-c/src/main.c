@@ -4,6 +4,7 @@
 #include <libgen.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
 
@@ -338,51 +339,59 @@ static void repl(void) {
 #define CMD_RUN_KO     "\xEC\x8B\xA4\xED\x96\x89"               /* 실행 */
 #define CMD_REPL_KO    "\xEB\x8C\x80\xED\x99\x94"               /* 대화 */
 
-/* Path to na_rt.c for linking native user programs (not into ganada itself). */
-static char g_argv0[4096];
+/* 네이티브 프로그램에 함께 묶는 런타임(na_rt.h · na_rt.c) — make 가 실행 파일 안에 넣어 둔다.
+ * 그래서 설치하거나 옮긴 바이너리도 컴파일할 때 작업 폴더에 풀어 쓰기만 하면 된다. */
+#include "na_rt_embed.h"
 
-static int find_na_rt(char *out, size_t outsz) {
-    /* 1) <dir(argv0)>/src/na_rt.c  (dev: ganada-c/ganada → ganada-c/src/na_rt.c) */
-    if (g_argv0[0]) {
-        char resolved[4096];
-        if (realpath(g_argv0, resolved)) {
-            char *slash = strrchr(resolved, '/');
-            if (slash) {
-                *slash = 0;
-                snprintf(out, outsz, "%s/src/na_rt.c", resolved);
-                if (access(out, R_OK) == 0) return 0;
-            }
-        }
-        char tmp[4096];
-        snprintf(tmp, sizeof tmp, "%s", g_argv0);
-        char *slash = strrchr(tmp, '/');
-        if (slash) {
-            *slash = 0;
-            snprintf(out, outsz, "%s/src/na_rt.c", tmp);
-            if (access(out, R_OK) == 0) return 0;
-        }
-    }
-    /* 2) cwd-relative fallbacks */
-    static const char *cands[] = { "src/na_rt.c", "ganada-c/src/na_rt.c", NULL };
-    for (int i = 0; cands[i]; i++) {
-        if (access(cands[i], R_OK) == 0) {
-            snprintf(out, outsz, "%s", cands[i]);
-            return 0;
-        }
-    }
-    return -1;
+static int write_bytes(const char *path, const unsigned char *data, size_t n) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    size_t w = fwrite(data, 1, n, f);
+    if (fclose(f) != 0 || w != n) return -1;
+    return 0;
 }
 
+/* 작업 폴더 dir 에 na_rt.h · na_rt.c 를 쓰고 na_rt.c 경로를 nart 에 돌려준다. 0 = 성공 */
+static int write_runtime(const char *dir, char *nart, size_t nartsz) {
+    char h[4096 + 16];
+    snprintf(h, sizeof h, "%s/na_rt.h", dir);
+    snprintf(nart, nartsz, "%s/na_rt.c", dir);
+    if (write_bytes(h, EMBED_na_rt_h, sizeof EMBED_na_rt_h - 1) != 0) return -1;
+    return write_bytes(nart, EMBED_na_rt_c, sizeof EMBED_na_rt_c - 1);
+}
+
+/* 작업 폴더를 치운다 — 이 폴더엔 아래 네 파일만 생긴다 */
+static void rm_work(const char *dir) {
+    static const char *names[] = { "na_rt.h", "na_rt.c", "prog.ll", "prog", NULL };
+    if (!dir[0]) return;
+    char p[4096 + 16];
+    for (int i = 0; names[i]; i++) {
+        snprintf(p, sizeof p, "%s/%s", dir, names[i]);
+        unlink(p);
+    }
+    rmdir(dir);
+}
+
+/* 기다리는 동안 받은 SIGINT/SIGQUIT (0 = 없음) */
+static volatile sig_atomic_t g_got_sig;
+static void note_sig(int sig) { g_got_sig = sig; }
+
 /* 셸을 거치지 않고 실행한다 — 경로의 빈칸·따옴표·; 가 명령으로 읽히지 않게.
- * system() 처럼 기다리는 동안 SIGINT/SIGQUIT 는 자식만 받는다. quiet: 자식의 stdout/stderr 를 버린다.
+ * 기다리는 동안 SIGINT/SIGQUIT 는 자식이 받아 끝나고, 부모는 죽지 않고 받았다는 것만
+ * g_got_sig 에 적는다 — 임시 폴더를 치운 뒤 같은 신호로 끝내야 하고, Ctrl-C 로 죽은 clang 을
+ * "컴파일 실패" 로 보고 인터프리터로 넘어가면 안 된다. quiet: 자식의 stdout/stderr 를 버린다.
  * 반환: waitpid 상태, 실행 실패는 -1. */
 static int spawn_wait(char *const argv[], int quiet) {
-    struct sigaction ign, oint, oquit;
-    memset(&ign, 0, sizeof ign);
-    ign.sa_handler = SIG_IGN;
-    sigemptyset(&ign.sa_mask);
-    sigaction(SIGINT, &ign, &oint);
-    sigaction(SIGQUIT, &ign, &oquit);
+    struct sigaction note, oint, oquit;
+    memset(&note, 0, sizeof note);
+    note.sa_handler = note_sig;
+    sigemptyset(&note.sa_mask);
+    g_got_sig = 0;
+    sigaction(SIGINT, NULL, &oint);
+    sigaction(SIGQUIT, NULL, &oquit);
+    /* 처음부터 무시하던 신호(셸의 백그라운드 실행 등)는 계속 무시한다 */
+    if (oint.sa_handler != SIG_IGN) sigaction(SIGINT, &note, NULL);
+    if (oquit.sa_handler != SIG_IGN) sigaction(SIGQUIT, &note, NULL);
     int st = -1;
     pid_t pid = fork();
     if (pid == 0) {
@@ -401,6 +410,13 @@ static int spawn_wait(char *const argv[], int quiet) {
     sigaction(SIGINT, &oint, NULL);
     sigaction(SIGQUIT, &oquit, NULL);
     return st;
+}
+
+/* 인터프리터로 돌았다면 이 프로세스가 그 신호로 끝났다(Ctrl-C·파이프 끊김) — 똑같이 끝낸다 */
+static int die_by(int sig) {
+    signal(sig, SIG_DFL);
+    raise(sig);
+    return 128 + sig;
 }
 
 /* LLVM 경로 모드:
@@ -453,18 +469,26 @@ static int compile_llvm(const char *path, int mode) {
         return 1;
     }
 
-    char tmpdir[4096] = "";
-    char outll[4096];
-    char outbin[4096];
-    char runbin[4096 + 2];
-    if (try_mode) {
-        /* 실행 폴백 경로: 소스 옆을 더럽히지 않고, 남이 미리 심은 /tmp 파일도 따라가지 않게 전용 폴더 */
+    /* 작업 폴더(전용 mkdtemp): 런타임 소스를 풀어 두고, 실행 경로에선 IR·바이너리도 둔다.
+     * 소스 옆을 더럽히지 않고, 남이 /tmp 에 미리 심은 파일도 따라가지 않는다. */
+    char work[4096] = "";
+    if (mode != LLVM_IR) {
         const char *base = getenv("TMPDIR");
         if (!base || !base[0]) base = "/tmp";
-        snprintf(tmpdir, sizeof tmpdir, "%s/ganada_run_XXXXXX", base);
-        if (!mkdtemp(tmpdir)) { free(ir); free(src); return 2; }
-        snprintf(outll, sizeof outll, "%s/prog.ll", tmpdir);
-        snprintf(outbin, sizeof outbin, "%s/prog", tmpdir);
+        snprintf(work, sizeof work, "%s/ganada_run_XXXXXX", base);
+        if (!mkdtemp(work)) {
+            if (!try_mode) fprintf(stderr, "LLVM: 임시 폴더를 만들 수 없습니다 (%s)\n", base);
+            free(ir); free(src);
+            return try_mode ? 2 : 1;
+        }
+    }
+    char outll[4096 + 16];
+    char outbin[4096 + 16];
+    char runbin[4096 + 32];
+    char nart[4096 + 16];
+    if (try_mode) {
+        snprintf(outll, sizeof outll, "%s/prog.ll", work);
+        snprintf(outbin, sizeof outbin, "%s/prog", work);
     } else {
         snprintf(outll, sizeof outll, "%s.ll", path);
         snprintf(outbin, sizeof outbin, "%s.native", path);
@@ -473,14 +497,10 @@ static int compile_llvm(const char *path, int mode) {
     snprintf(runbin, sizeof runbin, "%s%s", strchr(outbin, '/') ? "" : "./", outbin);
     FILE *f = fopen(outll, "w");
     if (!f) {
-        if (try_mode) {
-            rmdir(tmpdir);
-            free(ir); free(src);
-            return 2;
-        }
-        fprintf(stderr, "쓸 수 없음: %s\n", outll);
+        rm_work(work);
+        if (!try_mode) fprintf(stderr, "쓸 수 없음: %s\n", outll);
         free(ir); free(src);
-        return 1;
+        return try_mode ? 2 : 1;
     }
     fputs(ir, f);
     fclose(f);
@@ -494,33 +514,30 @@ static int compile_llvm(const char *path, int mode) {
     }
 
     /* 빌드/나/TRY: clang links IR + na_rt.c (prints, strings, errors). */
-    char nart[4096];
-    if (find_na_rt(nart, sizeof nart) != 0) {
-        if (try_mode) {
-            unlink(outll); rmdir(tmpdir);
-            free(ir); free(src);
-            return 2;
-        }
-        fprintf(stderr, "LLVM: na_rt.c 를 찾을 수 없습니다 (ganada-c/src/na_rt.c)\n");
+    if (write_runtime(work, nart, sizeof nart) != 0) {
+        rm_work(work);
+        if (!try_mode) fprintf(stderr, "LLVM: 런타임을 쓸 수 없습니다 (%s)\n", work);
         free(ir); free(src);
-        return 1;
+        return try_mode ? 2 : 1;
     }
     /* TRY: clang 진단은 삼키고, 실패 시 인터프리터로 조용히 폴백 */
     if (!try_mode)
         fprintf(stderr, "clang → %s (+ na_rt)\n", outbin);
     char *cc_argv[] = { "clang", "-O2", "-Wno-override-module", "-o", outbin, outll, nart, NULL };
     int st = spawn_wait(cc_argv, try_mode);
-    if (st == -1 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) {
-        if (try_mode) {
-            unlink(outll); unlink(outbin); rmdir(tmpdir);
-            free(ir); free(src);
-            return 2;
-        }
-        fprintf(stderr, "clang 링크 실패 (rc=%d)\n", st);
+    if (g_got_sig) {   /* 컴파일 도중 Ctrl-C — 폴백해서 프로그램을 돌리면 안 된다 */
+        rm_work(work);
         free(ir); free(src);
-        return 1;
+        return die_by(g_got_sig);
+    }
+    if (st == -1 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) {
+        rm_work(work);
+        if (!try_mode) fprintf(stderr, "clang 링크 실패 (rc=%d)\n", st);
+        free(ir); free(src);
+        return try_mode ? 2 : 1;
     }
     if (mode == LLVM_BUILD) {
+        rm_work(work);
         fprintf(stderr, "네이티브 바이너리 → %s\n", outbin);
         free(ir); free(src);
         return 0;
@@ -529,18 +546,11 @@ static int compile_llvm(const char *path, int mode) {
     fflush(stdout);
     char *run_argv[] = { runbin, NULL };
     st = spawn_wait(run_argv, 0);
-    if (try_mode) {
-        unlink(outll); unlink(outbin); rmdir(tmpdir);
-    }
+    int sig = g_got_sig ? g_got_sig : (st != -1 && WIFSIGNALED(st)) ? WTERMSIG(st) : 0;
+    rm_work(work);
     free(ir); free(src);
+    if (sig) return die_by(sig);
     if (st == -1) return 1;
-    if (WIFSIGNALED(st)) {
-        /* 인터프리터로 돌았다면 이 프로세스가 그 신호로 끝났다(파이프 끊김·Ctrl-C) — 똑같이 */
-        int sig = WTERMSIG(st);
-        signal(sig, SIG_DFL);
-        raise(sig);
-        return 128 + sig;
-    }
     return WEXITSTATUS(st);
 }
 
@@ -560,12 +570,8 @@ static int run_smart(const char *path) {
     return rc;
 }
 
-int main(int argc, char **argv) {
-    gc_init(__builtin_frame_address(0));    /* high end of the stack to scan */
-    if (argv[0]) {
-        strncpy(g_argv0, argv[0], sizeof g_argv0 - 1);
-        g_argv0[sizeof g_argv0 - 1] = 0;
-    }
+static int cli_main(int argc, char **argv, size_t stack_size) {
+    gc_init(__builtin_frame_address(0), stack_size);    /* high end of the stack to scan */
     /* 실행/run — 네이티브 우선, 미지원 시 인터프리터 폴백 */
     if (argc >= 3 && (!strcmp(argv[1], "run") || !strcmp(argv[1], CMD_RUN_KO)))
         return run_smart(argv[2]);
@@ -592,4 +598,42 @@ int main(int argc, char **argv) {
     fprintf(stderr, "  GANADA_FORCE_INTERP=1     → 항상 인터프리터\n");
     fprintf(stderr, "  GANADA_FORCE_LLVM=1       → 네이티브만 (실패 시 오류)\n");
     return 2;
+}
+
+/* 인터프리터는 C 재귀로 돈다. 함수 몸에 반복이 여럿 겹치면 재귀 한 단계가 수십 KB 가 되어, 8MB 기본
+ * 스택으로는 재귀 한도(깊이 700)에 닿기 전에 바닥났다(반복 8겹이면 깊이 300 남짓) — 네이티브는 700 까지
+ * 가니 두 길의 답도 갈렸다. 그래서 큰 스택의 스레드에서 돈다(쓰는 만큼만 메모리를 먹는다).
+ * 메인 스레드는 기다리기만 하며 모든 신호를 막아 둔다: Ctrl-C 같은 프로세스 신호가 일하는 스레드로 가야
+ * 서버의 accept() 가 깨고 처리기도 그 스레드에서 돈다. 스레드를 못 만들면 메인 스레드에서 그대로 돈다. */
+#define CLI_STACK ((size_t)256 << 20)
+
+typedef struct { int argc; char **argv; sigset_t mask; int rc; } CliArgs;
+
+static void *cli_thread(void *p) {
+    CliArgs *a = p;
+    pthread_sigmask(SIG_SETMASK, &a->mask, NULL);   /* 원래 마스크로 — 신호는 이 스레드가 받는다 */
+    a->rc = cli_main(a->argc, a->argv, CLI_STACK);
+    return NULL;
+}
+
+int main(int argc, char **argv) {
+    CliArgs a = { argc, argv };
+    sigset_t all;
+    pthread_attr_t at;
+    pthread_t th;
+    sigfillset(&all);
+    if (pthread_attr_init(&at) == 0) {
+        /* 새 스레드는 모두 막힌 채 태어나 곧 원래 마스크로 푼다 — 그 사이 온 신호는 보류될 뿐이다 */
+        if (pthread_attr_setstacksize(&at, CLI_STACK) == 0
+            && pthread_sigmask(SIG_SETMASK, &all, &a.mask) == 0) {
+            if (pthread_create(&th, &at, cli_thread, &a) == 0) {
+                pthread_attr_destroy(&at);
+                pthread_join(th, NULL);
+                return a.rc;
+            }
+            pthread_sigmask(SIG_SETMASK, &a.mask, NULL);
+        }
+        pthread_attr_destroy(&at);
+    }
+    return cli_main(argc, argv, 0);
 }

@@ -364,6 +364,9 @@ static Node *parse_unary(P *p) {
     }
     if (at(p, T_OP, intern_cz(it, "-"))) {
         eat(p, T_OP, NULL);
+        /* -9223372036854775808: 2^63 은 64비트에 안 담기지만 그 음수는 최소정수다 */
+        Tok *nt = peek(p);
+        if (nt->kind == T_NUM && nt->s == LIT_2_63) { nt->s = NULL; return parse_call(p); }
         Node *nd = node_new(p, N_UN, t->line);
         nd->op = OP_NEG; nd->a = parse_unary(p);
         return nd;
@@ -414,6 +417,7 @@ static Node *parse_primary(P *p) {
     Interp *it = p->it;
     Tok *t = peek(p);
     if (t->kind == T_NUM) {
+        if (t->s == LIT_2_63) g_error(it, ERR_INT_LITERAL, t->line, t->col);
         eat(p, T_NUM, NULL);
         Node *nd = node_new(p, N_LIT, t->line);
         nd->lit = t->num;

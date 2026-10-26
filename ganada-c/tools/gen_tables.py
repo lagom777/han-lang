@@ -182,6 +182,10 @@ MESSAGES = {  # 상수명 → printf 형식 오류 메시지
     'ERR_NOT_IMPLEMENTED': '이 C 구현에서는 아직 지원하지 않습니다: %s',
     # 파이썬은 정수가 무한 자리라 이 오류가 없다 — C 는 64비트라 답을 담을 수 없다.
     'ERR_INT_OVERFLOW': '정수 범위(64비트)를 넘었습니다 — 이 C 구현은 큰 정수를 다루지 못합니다',
+    'ERR_INT_LITERAL': '[%d행 %d열] 정수 범위(64비트)를 넘었습니다 — 이 C 구현은 큰 정수를 다루지 못합니다',
+    # 문자열 길이가 32비트라 상한이 있다 — 파이썬은 메모리가 닿는 데까지 만든다(넘으면 MemoryError).
+    'ERR_TOO_LONG': '결과가 너무 깁니다 — 이 C 구현이 담을 수 있는 문자열·목록 길이를 넘었습니다',
+    'ERR_NO_MEMORY': '메모리가 부족합니다',
     'ERR_FILE_READ': '파일을 읽을 수 없습니다: %s',
     'ERR_FILE_WRITE': '파일에 쓸 수 없습니다: %s',
     'ERR_JSON_PARSE': '제이슨파싱 오류: %s',
@@ -210,7 +214,8 @@ MESSAGES = {  # 상수명 → printf 형식 오류 메시지
     'STR_UNKNOWN_CMD_FMT': "알 수 없는 명령: %s (:도움 으로 목록)",
 }
 # 원문에 없는 C 구현 고유 메시지 — 검증 면제
-ALLOW_NEW = {'ERR_NOT_IMPLEMENTED', 'ERR_INT_OVERFLOW', 'ERR_FILE_READ', 'ERR_FILE_WRITE',
+ALLOW_NEW = {'ERR_NOT_IMPLEMENTED', 'ERR_INT_OVERFLOW', 'ERR_INT_LITERAL', 'ERR_TOO_LONG', 'ERR_NO_MEMORY',
+             'ERR_FILE_READ', 'ERR_FILE_WRITE',
              'ERR_JSON_PARSE', 'STR_USAGE', 'STR_BANNER', 'STR_CLEARED_FMT',
              'STR_UNKNOWN_CMD_FMT'}
 

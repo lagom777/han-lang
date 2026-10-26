@@ -364,18 +364,31 @@ static Value binop(Interp *it, int op, Node *ln, Node *rn, Env *env) {
         if (is_num_v(a) && (b.tag == VT_STR || b.tag == VT_LIST)) { seq = b; cnt = a; }
         if ((seq.tag == VT_STR || seq.tag == VT_LIST) && is_num_v(cnt) && cnt.tag != VT_FLOAT) {
             int64_t n = cnt.tag == VT_INT ? cnt.as.i : (int64_t)cnt.as.b;
+            /* 빈 것은 몇 번이든 빈 것 — n 번 돌지 않는다("" * 큰수 는 끝나지 않았다). 크기는
+             * 곱하기 전에 나눗셈으로 검사한다(곱이 넘쳐 작은 버퍼를 잡고 SIGSEGV 로 죽었다). */
             if (seq.tag == VT_STR) {
                 if (n <= 0) return v_str(str_from(""));
                 uint32_t bl = seq.as.s->len;
-                Str *r = gc_alloc(sizeof(Str) + bl * (uint64_t)n + 1, GC_STR);
-                r->len = bl * (uint32_t)n; r->cplen = UINT32_MAX; r->flags = seq.as.s->flags;
-                for (int64_t i = 0; i < n; i++) memcpy(r->data + i * bl, seq.as.s->data, bl);
-                r->data[r->len] = 0;
+                if (bl == 0) n = 1;
+                else if (n > SEQ_MAX_LEN / bl) G_ERR0(it, ERR_TOO_LONG);
+                size_t total = (size_t)bl * (size_t)n;
+                Str *r = gc_alloc(sizeof(Str) + total + 1, GC_STR);
+                r->len = (uint32_t)total; r->cplen = UINT32_MAX; r->flags = seq.as.s->flags;
+                if (total) memcpy(r->data, seq.as.s->data, bl);
+                for (size_t done = bl; done < total; ) {   /* 채운 앞부분을 통째로 복사 — log n 번 */
+                    size_t k = done < total - done ? done : total - done;
+                    memcpy(r->data + done, r->data, k);
+                    done += k;
+                }
+                r->data[total] = 0;
                 return v_str(r);
             }
-            List *l = list_new(n > 0 ? seq.as.l->n * n : 0);
+            long sn = seq.as.l->n;
+            if (n <= 0 || sn == 0) n = 0;
+            else if (n > SEQ_MAX_LEN / sn) G_ERR0(it, ERR_TOO_LONG);
+            List *l = list_new(sn * n);
             for (int64_t i = 0; i < n; i++)
-                for (long j = 0; j < seq.as.l->n; j++) list_push(l, seq.as.l->items[j]);
+                for (long j = 0; j < sn; j++) list_push(l, seq.as.l->items[j]);
             return v_list(l);
         }
         return num_mul(it, a, b);
@@ -414,22 +427,32 @@ static Value binop(Interp *it, int op, Node *ln, Node *rn, Env *env) {
     g_error(it, "unknown op %d", op);
 }
 
+/* 정수 셈은 64비트를 넘으면 오류다. 파이썬은 큰 정수로 맞는 답을 내는데, 감긴 값(음수가
+ * 된 합 등)을 조용히 내면 틀린 답이다. 네이티브 길도 같은 자리에서 같은 오류를 낸다. */
+static int64_t int_of(Value v) { return v.tag == VT_INT ? v.as.i : v.as.b; }
+
 static Value num_add(Interp *it, Value a, Value b) {
     if (!is_num_v(a) || !is_num_v(b)) type_err2(it, "+", a, b);
     if (a.tag == VT_FLOAT || b.tag == VT_FLOAT) return v_float(to_dbl(a) + to_dbl(b));
-    return v_int((a.tag == VT_INT ? a.as.i : a.as.b) + (b.tag == VT_INT ? b.as.i : b.as.b));
+    int64_t r;
+    if (__builtin_add_overflow(int_of(a), int_of(b), &r)) G_ERR0(it, ERR_INT_OVERFLOW);
+    return v_int(r);
 }
 
 static Value num_sub(Interp *it, Value a, Value b) {
     if (!is_num_v(a) || !is_num_v(b)) type_err2(it, "-", a, b);
     if (a.tag == VT_FLOAT || b.tag == VT_FLOAT) return v_float(to_dbl(a) - to_dbl(b));
-    return v_int((a.tag == VT_INT ? a.as.i : a.as.b) - (b.tag == VT_INT ? b.as.i : b.as.b));
+    int64_t r;
+    if (__builtin_sub_overflow(int_of(a), int_of(b), &r)) G_ERR0(it, ERR_INT_OVERFLOW);
+    return v_int(r);
 }
 
 static Value num_mul(Interp *it, Value a, Value b) {
     if (!is_num_v(a) || !is_num_v(b)) type_err2(it, "*", a, b);
     if (a.tag == VT_FLOAT || b.tag == VT_FLOAT) return v_float(to_dbl(a) * to_dbl(b));
-    return v_int((a.tag == VT_INT ? a.as.i : a.as.b) * (b.tag == VT_INT ? b.as.i : b.as.b));
+    int64_t r;
+    if (__builtin_mul_overflow(int_of(a), int_of(b), &r)) G_ERR0(it, ERR_INT_OVERFLOW);
+    return v_int(r);
 }
 
 /* ---------------------------------------------------------------- index/slice */
@@ -511,17 +534,20 @@ static Value slice_eval(Interp *it, Value obj, Node *sn, Node *en, Env *env) {
 }
 
 /* ---------------------------------------------------------------- funcs */
-/* 깊이 700 에 닿기 전에 C 스택이 먼저 바닥날 수 있다(함수 몸에 반복·조건이 깊게 겹치면
- * 한 단계가 커진다). 그러면 SIGSEGV 로 죽고 버퍼의 출력까지 잃었다 — 한도에 한 단계 여유
- * (1/16, 최소 256KB)만 남기고 같은 재귀 오류로 멈춘다. 여유를 크게 잡으면 전에 끝까지
- * 돌던 프로그램까지 일찍 멈춘다. */
+/* 함수 몸에 반복·조건이 깊게 겹치면 재귀 한 단계가 수십 KB 가 된다. main.c 는 그래서 큰 스택의
+ * 스레드에서 돌려 깊이 700 까지 닿게 하고, 이 검사는 그래도 스택이 바닥나려 할 때의 마지막 방어다
+ * (스레드를 못 만들어 8MB 메인 스택에서 돌 때 특히) — SIGSEGV 로 죽고 버퍼의 출력까지 잃는 대신
+ * 한도에 한 단계 여유(1/16, 최소 256KB)만 남기고 같은 재귀 오류로 멈춘다. */
 static size_t stack_budget(void) {
     static size_t budget;
     if (!budget) {
-        size_t lim = (size_t)8 << 20;
+        size_t lim = gc_stack_size();
         struct rlimit rl;
-        if (getrlimit(RLIMIT_STACK, &rl) == 0)
-            lim = rl.rlim_cur == RLIM_INFINITY ? (size_t)256 << 20 : (size_t)rl.rlim_cur;
+        if (!lim) {
+            lim = (size_t)8 << 20;
+            if (getrlimit(RLIMIT_STACK, &rl) == 0)
+                lim = rl.rlim_cur == RLIM_INFINITY ? (size_t)256 << 20 : (size_t)rl.rlim_cur;
+        }
         size_t margin = lim / 16 > ((size_t)256 << 10) ? lim / 16 : ((size_t)256 << 10);
         budget = lim > 2 * margin ? lim - margin : lim / 2;
     }
@@ -604,7 +630,10 @@ static Value eval(Interp *it, Node *node, Env *env) {
     case N_UN: {
         Value v = eval(it, node->a, env);
         if (node->op == OP_NOT) return v_bool(!v_truthy(v));
-        if (v.tag == VT_INT) return v_int(-v.as.i);
+        if (v.tag == VT_INT) {
+            if (v.as.i == INT64_MIN) G_ERR0(it, ERR_INT_OVERFLOW);
+            return v_int(-v.as.i);
+        }
         if (v.tag == VT_FLOAT) return v_float(-v.as.f);
         if (v.tag == VT_BOOL) return v_int(-v.as.b);
         type_err1(it, "-", v);
@@ -821,7 +850,12 @@ static void exec(Interp *it, Node *node, Env *env) {
                 if (code == GS_BRK) break;
                 if (code != GS_CONT) { POP_H(it); g_throw(it, code); }
             }
-            if (use_int) ii += ist; else vi += sd;
+            if (use_int) {
+                /* 다음 값이 64비트를 넘으면 끝도 지난 것(끝은 64비트 안) — 감기면 영원히 돌았다 */
+                int64_t nx;
+                if (__builtin_add_overflow(ii, ist, &nx)) break;
+                ii = nx;
+            } else vi += sd;
         }
         POP_H(it);
         return;
