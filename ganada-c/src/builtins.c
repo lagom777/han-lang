@@ -1493,9 +1493,44 @@ static Value b_setop(Interp *it, Value *args, int n, int op) {
 }
 
 /* ---------------------------------------------------------------- random */
+/* arc4random 은 macOS·BSD 와 glibc 2.36 부터 있다 — 그보다 옛 glibc(Ubuntu 22.04 등)나 musl 에선
+ * 링크가 안 됐다. 없으면 /dev/urandom 으로 한 번 시드한 splitmix64 를 쓴다(파이썬 random 처럼
+ * 암호용은 아니다). GANADA_NO_ARC4RANDOM 으로 대체 길을 강제할 수 있다. */
+#if !defined(GANADA_NO_ARC4RANDOM) && (defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) \
+    || defined(__OpenBSD__) || defined(__DragonFly__) \
+    || (defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 36))))
+static uint64_t rand64(void) { uint64_t r; arc4random_buf(&r, sizeof r); return r; }
+#else
+static uint64_t rand64(void) {
+    static uint64_t s;
+    static int seeded;
+    if (!seeded) {
+        FILE *f = fopen("/dev/urandom", "rb");
+        if (!f || fread(&s, sizeof s, 1, f) != 1)
+            s = (uint64_t)time(NULL) ^ ((uint64_t)getpid() << 32) ^ (uint64_t)(uintptr_t)&s;
+        if (f) fclose(f);
+        seeded = 1;
+    }
+    uint64_t z = (s += 0x9e3779b97f4a7c15ULL);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+    return z ^ (z >> 31);
+}
+#endif
+
+/* [0, n) 의 고른 정수. n == 0 은 2^64 전체. 2^64 mod n 아래를 버려 나머지 치우침을 없앤다 */
+static uint64_t rand_below(uint64_t n) {
+    if (n == 0) return rand64();
+    uint64_t lim = -n % n;
+    for (;;) {
+        uint64_t r = rand64();
+        if (r >= lim) return r % n;
+    }
+}
+
 static Value b_randomf(Interp *it, Value *args, int n) {
     (void)args; (void)n; (void)it;
-    return v_float((double)arc4random() / 4294967296.0);
+    return v_float((double)(rand64() >> 11) * 0x1.0p-53);   /* 53비트 — 파이썬 random() 과 같은 촘촘함 */
 }
 
 static Value b_randint(Interp *it, Value *args, int n) {
@@ -1503,14 +1538,16 @@ static Value b_randint(Interp *it, Value *args, int n) {
     int64_t a = to_int64(it, need_arg(it, args, n, 0, fn), fn);
     int64_t b = to_int64(it, need_arg(it, args, n, 1, fn), fn);
     if (b < a) g_error(it, FMT_CALL_ERR, fn, "empty range");
-    return v_int(a + (int64_t)arc4random_uniform((uint32_t)(b - a + 1)));
+    /* 범위 크기를 uint32 로 잘라서 2^32 넘는 범위는 앞쪽만 나왔고, b - a + 1 은 넘칠 수 있었다 */
+    uint64_t span = (uint64_t)b - (uint64_t)a + 1;           /* 0 이면 int64 전체 */
+    return v_int((int64_t)((uint64_t)a + rand_below(span)));
 }
 
 static Value b_choice(Interp *it, Value *args, int n) {
     const char *fn = BUILTIN_NAMES[B_MUJAGWISEONTAEG];
     List *l = need_list(it, need_arg(it, args, n, 0, fn), fn);
     if (!l->n) g_error(it, FMT_CALL_ERR, fn, "empty list");
-    return l->items[(long)arc4random_uniform((uint32_t)l->n)];
+    return l->items[(long)rand_below((uint64_t)l->n)];
 }
 
 /* ---------------------------------------------------------------- misc */

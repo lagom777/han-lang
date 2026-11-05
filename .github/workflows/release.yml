@@ -1,0 +1,129 @@
+# 릴리스 — 리눅스·macOS 바이너리를 만들어 GitHub 릴리스에 올린다.
+# 태그(v0.1.0 꼴)를 밀거나, Actions 탭에서 '릴리스' 를 손으로 돌리면(태그를 넣는다) 된다.
+# 이 파일을 고치는 PR 에서는 빌드·검사·묶기까지만 해 본다(릴리스는 만들지 않는다).
+name: 릴리스
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '태그 (예: v0.1.0) — 없으면 이 커밋에 새로 단다'
+        required: true
+  pull_request:
+    paths: ['.github/workflows/release.yml']
+
+permissions:
+  contents: read
+
+env:
+  # PR 에서 해 볼 때는 파일 이름에 못 쓰는 '3/merge' 대신 고정 이름
+  TAG: ${{ inputs.tag || (github.event_name == 'pull_request' && 'pr-test') || github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc 2.35 위에서 빌드한다(바이너리는 GLIBC_2.34 까지 요구) — 더 새 glibc 로 빌드하면
+          # 그 버전의 심볼을 요구해서 Ubuntu 22.04 · Debian 12 에서 돌지 않는다
+          - os: ubuntu-22.04
+            target: linux-x86_64
+          # arm64 + x86_64 유니버설 하나로 애플 실리콘·인텔 맥 모두
+          - os: macos-latest
+            target: macos-universal
+            cflags: -arch arm64 -arch x86_64 -mmacosx-version-min=11.0
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: 태그 꼴 확인
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ && "$TAG" != pr-test ]]; then
+            echo "태그는 v0.1.0 꼴이어야 한다: '$TAG'"
+            exit 1
+          fi
+      - uses: actions/checkout@v5
+      - name: clang 15 (네이티브 IR 은 LLVM 15 이상이 읽는다 — 22.04 의 clang 은 14)
+        if: runner.os == 'Linux'
+        run: |
+          command -v clang-15 || { sudo apt-get update && sudo apt-get install -y clang-15; }
+          mkdir -p "$HOME/bin" && ln -sf "$(command -v clang-15)" "$HOME/bin/clang"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: 빌드
+        run: make -C ganada-c CFLAGS="-O2 -std=c11 -Wall -Wno-unused-function ${{ matrix.cflags }}"
+      - name: 검사 — 골든 · 보안회귀 · 네이티브회귀
+        run: make -C ganada-c test
+      - name: 무엇을 요구하나
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            lipo -archs ganada-c/ganada
+            otool -l ganada-c/ganada | grep -A4 LC_BUILD_VERSION | grep minos | sort -u
+          else
+            echo "glibc $(objdump -T ganada-c/ganada | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
+          fi
+      - name: 묶기
+        run: |
+          name="ganada-$TAG-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp ganada-c/ganada "dist/$name/가나다"
+          cp ganada-c/ganada "dist/$name/ganada"
+          cp README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          rm -rf "dist/$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 체크섬
+        run: cd dist && sha256sum *.tar.gz > SHA256SUMS && cat SHA256SUMS
+      - name: 릴리스 만들기
+        run: |
+          sed "s/@TAG@/$TAG/g" > notes.md <<'EOF'
+          ## 설치
+
+          리눅스 (x86_64 · glibc 2.34 이상 — Ubuntu 22.04 · Debian 12 · RHEL 9 이후):
+          ```bash
+          tar -xzf ganada-@TAG@-linux-x86_64.tar.gz
+          sudo install ganada-@TAG@-linux-x86_64/가나다 ganada-@TAG@-linux-x86_64/ganada /usr/local/bin/
+          ```
+
+          macOS 11 이상 (애플 실리콘 · 인텔 공용):
+          ```bash
+          tar -xzf ganada-@TAG@-macos-universal.tar.gz
+          xattr -dr com.apple.quarantine ganada-@TAG@-macos-universal   # 브라우저로 받았을 때 (서명 안 된 바이너리)
+          sudo mkdir -p /usr/local/bin
+          sudo install ganada-@TAG@-macos-universal/가나다 ganada-@TAG@-macos-universal/ganada /usr/local/bin/
+          ```
+
+          그다음 `가나다 실행 파일.ㄱㄴㄷ` · `가나다 대화`. 네이티브 빌드(`가나다 빌드` · `가나다 나`)에는
+          clang 15 이상이 있어야 한다 — 없으면 `가나다 실행` 은 인터프리터로 돌고 결과는 같다.
+          다른 플랫폼은 소스에서: `cd ganada-c && make && sudo make install`. 받은 파일은 `SHA256SUMS` 로 확인한다.
+          EOF
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "가나다 $TAG" --notes-file notes.md --generate-notes
+      - name: 올린 것을 받아서 돌려 본다
+        run: |
+          mkdir 받기 && cd 받기
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-linux-x86_64.tar.gz' --pattern SHA256SUMS
+          sha256sum --check --ignore-missing SHA256SUMS
+          tar -xzf "ganada-$TAG-linux-x86_64.tar.gz"
+          printf '출력("안녕, " + (6 * 7))\n' > 확인.ㄱㄴㄷ
+          test "$(GANADA_FORCE_INTERP=1 "./ganada-$TAG-linux-x86_64/가나다" 실행 확인.ㄱㄴㄷ)" = "안녕, 42"
