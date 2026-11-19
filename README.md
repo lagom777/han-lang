@@ -66,10 +66,10 @@ make test                            # 회귀 검사 (파이썬 없이 돈다)
 `가나다.py` 는 **지우지 않는다** — 언어 의미의 기준이라서, C 가 맞게 동작하는지 대조하는 데 계속 쓴다:
 ```bash
 cd ganada-c
-make test           # 파이썬 없음. 동결된 골든 코퍼스로 대조 (케이스 315 · 예제 83) + 보안·네이티브 회귀 그물
+make test           # 파이썬 없음. 동결된 골든 코퍼스로 대조 (케이스 318 · 예제 83) + 보안·네이티브 회귀 그물
 make test-conform   # 파이썬 필요. 가나다.py 를 직접 정답지로 삼아 양쪽 실행 대조
 make golden         # 파이썬 필요. 기대 출력을 다시 동결 (언어 동작을 의도적으로 바꿨을 때만)
-python3 ../tests/test_han.py   # 참조 구현 자체 테스트 148개
+python3 ../tests/test_han.py   # 참조 구현 자체 테스트 149개
 ```
 자세한 내용은 `ganada-c/tests/golden/README.md`.
 

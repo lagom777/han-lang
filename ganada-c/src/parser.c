@@ -232,6 +232,7 @@ static Node *parse_statement_inner(P *p) {
             if (node->kind == N_INDEX) {
                 Node *nd = node_new(p, N_SETINDEX, t->line);
                 nd->a = node->a; nd->b = node->b; nd->c = bin;
+                nd->aug = 1;            /* a·b 는 한 번만 센다 — interp.c N_SETINDEX */
                 return nd;
             }
             G_ERR0(it, ERR_BAD_COMPOUND);

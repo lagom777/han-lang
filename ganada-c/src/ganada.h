@@ -97,6 +97,7 @@ struct Node {
     const char *name;           /* interned: var/assign/func/try-err name */
     const char *str;            /* N_IMPORT path (malloc'd, raw) */
     int op;                     /* N_BIN / N_UN */
+    int aug;                    /* N_SETINDEX: 복합 대입(a[b] op= x)이면 1 — c 는 N_BIN(op, N_INDEX(a, b), x) */
     const char **pnames;        /* N_FUNC / N_LAMBDA */
     Node **pdefs;
     int nparams;
