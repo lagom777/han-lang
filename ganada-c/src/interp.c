@@ -329,6 +329,8 @@ static void type_err1(Interp *it, const char *op, Value a) {
     g_error(it, ERR_BINOP_TYPES, op, v_typename(a));
 }
 
+static Value binop_vals(Interp *it, int op, Value a, Value b);
+
 static Value binop(Interp *it, int op, Node *ln, Node *rn, Env *env) {
     if (op == OP_AND) {
         Value l = eval(it, ln, env);
@@ -340,6 +342,11 @@ static Value binop(Interp *it, int op, Node *ln, Node *rn, Env *env) {
     }
     Value a = eval(it, ln, env);
     Value b = eval(it, rn, env);
+    return binop_vals(it, op, a, b);
+}
+
+/* 두 값의 셈 — 단락하는 그리고/또는 은 binop 에서 끝난다. 복합 대입(목록[i] += x)도 이걸 쓴다 */
+static Value binop_vals(Interp *it, int op, Value a, Value b) {
     switch (op) {
     case OP_ADD: {
         if (a.tag == VT_STR || b.tag == VT_STR) {
@@ -924,7 +931,13 @@ static void exec(Interp *it, Node *node, Env *env) {
     case N_SETINDEX: {
         Value obj = eval(it, node->a, env);
         Value idx = eval(it, node->b, env);
-        Value v = eval(it, node->c, env);
+        Value v;
+        if (node->aug) {
+            /* 목록[i] += x: 목록·i 를 한 번만 센다. a[i] = a[i] + x 로 바꿔 쓴 채 돌리면 둘을 두 번
+             * 세서 목록[무작위정수(0, 5)] += 1 이 읽은 칸과 다른 칸에 썼다 */
+            Value cur = index_get(it, obj, idx);
+            v = binop_vals(it, node->c->op, cur, eval(it, node->c->b, env));
+        } else v = eval(it, node->c, env);
         index_set(it, obj, idx, v);
         return;
     }

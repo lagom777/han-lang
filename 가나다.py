@@ -177,11 +177,11 @@ class Parser:
         for cop in ('+=', '-=', '*=', '/='):       # 복합 대입
             if self.at('OP', cop):
                 self.eat('OP', cop)
-                combined = ('bin', cop[0], node, self.expr())
+                rhs = self.expr()
                 if node[0] == 'var':
-                    return ('assign', node[1], combined)
-                if node[0] == 'index':
-                    return ('setindex', node[1], node[2], combined)
+                    return ('assign', node[1], ('bin', cop[0], node, rhs))
+                if node[0] == 'index':                # 목록·색인은 한 번만 센다(a[i] = a[i] + x 로 바꿔 쓰면 두 번)
+                    return ('augindex', cop[0], node[1], node[2], rhs)
                 raise HanError("복합 대입 대상이 올바르지 않습니다")
         return ('exprstmt', node)
 
@@ -570,6 +570,10 @@ class Interp:
         elif t == 'setindex':
             obj = self.eval(node[1], env); i = self.eval(node[2], env); v = self.eval(node[3], env)
             self._index_set(obj, i, v)
+        elif t == 'augindex':                       # 목록[i] += x — 목록과 i 는 한 번만 센다
+            obj = self.eval(node[2], env); i = self.eval(node[3], env)
+            v = self.binop_vals(node[1], self._index_get(obj, i), self.eval(node[4], env))
+            self._index_set(obj, i, v)
         elif t == 'exprstmt':
             self.eval(node[1], env)
         else:
@@ -657,6 +661,9 @@ class Interp:
         if op == '또는':
             l = self.eval(ln, env); return l if 참인가(l) else self.eval(rn, env)
         a = self.eval(ln, env); b = self.eval(rn, env)
+        return self.binop_vals(op, a, b)
+
+    def binop_vals(self, op, a, b):             # 두 값의 셈 — 복합 대입(목록[i] += x)도 이걸 쓴다
         if op == '+':
             if isinstance(a, str) or isinstance(b, str):
                 return 문자열화(a) + 문자열화(b)
